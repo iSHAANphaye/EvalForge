@@ -1,0 +1,85 @@
+task_id: EF-CPP-001
+title: Lock-Free SPSC Ring Buffer in C++20
+language: cpp
+difficulty: hard
+category: concurrency
+tags:
+- lock-free
+- spsc
+- concurrency
+- atomics
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Lock-Free SPSC Ring Buffer in C++20\n\nImplement a high-throughput, cache-conscious, lock-free Single-Producer\
+  \ Single-Consumer (SPSC) bounded circular ring buffer in C++20 using `std::atomic` with explicit memory order semantics\
+  \ (`std::memory_order_acquire` and `std::memory_order_release`).\n\n## Requirements\n\nImplement the template class:\n```cpp\n\
+  template <typename T, size_t Capacity>\nclass SpscRingBuffer;\n```\n\n### Methods:\n- `bool push(const T& item)`:\n  Inserts\
+  \ an element into the buffer. Returns `true` on success, or `false` if the buffer is full.\n- `bool push(T&& item)`:\n \
+  \ Move-inserts an element. Returns `true` on success, or `false` if full.\n- `bool pop(T& item)`:\n  Extracts the oldest\
+  \ element into `item`. Returns `true` on success, or `false` if empty.\n- `[[nodiscard]] bool empty() const noexcept`:\n\
+  \  Returns `true` if no elements are currently available to consume.\n- `[[nodiscard]] bool full() const noexcept`:\n  Returns\
+  \ `true` if the buffer has reached maximum capacity.\n- `[[nodiscard]] size_t size() const noexcept`:\n  Returns current\
+  \ number of elements in the buffer.\n- `[[nodiscard]] constexpr size_t capacity() const noexcept`:\n  Returns compile-time\
+  \ `Capacity`.\n\n### Constraints:\n- Must not use mutexes, spinlocks, or conditional variables.\n- Must ensure lock-free\
+  \ progress for single producer and single consumer.\n"
+starter_code: "#pragma once\n#include <atomic>\n#include <cstddef>\n#include <utility>\n\ntemplate <typename T, size_t Capacity>\n\
+  class SpscRingBuffer {\npublic:\n    SpscRingBuffer() = default;\n\n    bool push(const T& item);\n    bool push(T&& item);\n\
+  \    bool pop(T& item);\n\n    [[nodiscard]] bool empty() const noexcept;\n    [[nodiscard]] bool full() const noexcept;\n\
+  \    [[nodiscard]] size_t size() const noexcept;\n    [[nodiscard]] constexpr size_t capacity() const noexcept { return\
+  \ Capacity; }\n};\n"
+canonical_solution: "#pragma once\n#include <atomic>\n#include <cstddef>\n#include <new>\n#include <type_traits>\n#include\
+  \ <utility>\n\ntemplate <typename T, size_t Capacity>\nclass SpscRingBuffer {\n    static_assert(Capacity >= 1, \"Capacity\
+  \ must be at least 1\");\n\npublic:\n    SpscRingBuffer() : head_(0), tail_(0) {}\n\n    ~SpscRingBuffer() {\n        T\
+  \ discard;\n        while (pop(discard)) {}\n    }\n\n    bool push(const T& item) {\n        const size_t current_tail\
+  \ = tail_.load(std::memory_order_relaxed);\n        const size_t current_head = head_.load(std::memory_order_acquire);\n\
+  \n        if ((current_tail - current_head) >= Capacity) {\n            return false; // Full\n        }\n\n        new\
+  \ (&storage_[current_tail % BufferSize]) T(item);\n        tail_.store(current_tail + 1, std::memory_order_release);\n \
+  \       return true;\n    }\n\n    bool push(T&& item) {\n        const size_t current_tail = tail_.load(std::memory_order_relaxed);\n\
+  \        const size_t current_head = head_.load(std::memory_order_acquire);\n\n        if ((current_tail - current_head)\
+  \ >= Capacity) {\n            return false; // Full\n        }\n\n        new (&storage_[current_tail % BufferSize]) T(std::move(item));\n\
+  \        tail_.store(current_tail + 1, std::memory_order_release);\n        return true;\n    }\n\n    bool pop(T& item)\
+  \ {\n        const size_t current_head = head_.load(std::memory_order_relaxed);\n        const size_t current_tail = tail_.load(std::memory_order_acquire);\n\
+  \n        if (current_head == current_tail) {\n            return false; // Empty\n        }\n\n        auto* ptr = reinterpret_cast<T*>(&storage_[current_head\
+  \ % BufferSize]);\n        item = std::move(*ptr);\n        ptr->~T();\n\n        head_.store(current_head + 1, std::memory_order_release);\n\
+  \        return true;\n    }\n\n    [[nodiscard]] bool empty() const noexcept {\n        return head_.load(std::memory_order_acquire)\
+  \ == tail_.load(std::memory_order_acquire);\n    }\n\n    [[nodiscard]] bool full() const noexcept {\n        return size()\
+  \ >= Capacity;\n    }\n\n    [[nodiscard]] size_t size() const noexcept {\n        const size_t h = head_.load(std::memory_order_acquire);\n\
+  \        const size_t t = tail_.load(std::memory_order_acquire);\n        return (t >= h) ? (t - h) : 0;\n    }\n\n    [[nodiscard]]\
+  \ constexpr size_t capacity() const noexcept {\n        return Capacity;\n    }\n\nprivate:\n    static constexpr size_t\
+  \ BufferSize = Capacity + 1;\n    alignas(alignof(T)) std::byte storage_[BufferSize][sizeof(T)];\n\n    alignas(64) std::atomic<size_t>\
+  \ tail_{0};\n    alignas(64) std::atomic<size_t> head_{0};\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(SpscRingBufferTest, BasicPushPop) {\n    SpscRingBuffer<int,\
+  \ 4> buffer;\n    EXPECT_TRUE(buffer.empty());\n    EXPECT_EQ(buffer.size(), 0);\n\n    EXPECT_TRUE(buffer.push(10));\n\
+  \    EXPECT_TRUE(buffer.push(20));\n    EXPECT_FALSE(buffer.empty());\n    EXPECT_EQ(buffer.size(), 2);\n\n    int val =\
+  \ 0;\n    EXPECT_TRUE(buffer.pop(val));\n    EXPECT_EQ(val, 10);\n    EXPECT_TRUE(buffer.pop(val));\n    EXPECT_EQ(val,\
+  \ 20);\n    EXPECT_TRUE(buffer.empty());\n}\n\nTEST(SpscRingBufferTest, CapacityBoundary) {\n    SpscRingBuffer<int, 2>\
+  \ buffer;\n    EXPECT_TRUE(buffer.push(1));\n    EXPECT_TRUE(buffer.push(2));\n    EXPECT_TRUE(buffer.full());\n    EXPECT_FALSE(buffer.push(3));\
+  \ // Buffer full\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <thread>\n#include <vector>\n#include <string>\n#if __has_include(\"solution.hpp\"\
+  )\n#include \"solution.hpp\"\n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(SpscRingBufferTest,\
+  \ MoveSemantics) {\n    SpscRingBuffer<std::string, 3> buffer;\n    std::string s = \"move_me_please\";\n    EXPECT_TRUE(buffer.push(std::move(s)));\n\
+  \    std::string out;\n    EXPECT_TRUE(buffer.pop(out));\n    EXPECT_EQ(out, \"move_me_please\");\n}\n\nTEST(SpscRingBufferTest,\
+  \ EmptyPopFailure) {\n    SpscRingBuffer<int, 5> buffer;\n    int x = -1;\n    EXPECT_FALSE(buffer.pop(x));\n    EXPECT_EQ(x,\
+  \ -1);\n}\n\nTEST(SpscRingBufferTest, WrapAroundStress) {\n    SpscRingBuffer<int, 3> buffer;\n    for (int i = 0; i < 500;\
+  \ ++i) {\n        EXPECT_TRUE(buffer.push(i));\n        int val = -1;\n        EXPECT_TRUE(buffer.pop(val));\n        EXPECT_EQ(val,\
+  \ i);\n    }\n    EXPECT_TRUE(buffer.empty());\n}\n\nTEST(SpscRingBufferTest, SingleItemBuffer) {\n    SpscRingBuffer<int,\
+  \ 1> buffer;\n    EXPECT_TRUE(buffer.push(42));\n    EXPECT_TRUE(buffer.full());\n    EXPECT_FALSE(buffer.push(99));\n \
+  \   int out = 0;\n    EXPECT_TRUE(buffer.pop(out));\n    EXPECT_EQ(out, 42);\n    EXPECT_TRUE(buffer.empty());\n}\n\nTEST(SpscRingBufferTest,\
+  \ MultiThreadedSpsc) {\n    constexpr int TotalItems = 20000;\n    SpscRingBuffer<int, 128> buffer;\n\n    std::thread producer([&]()\
+  \ {\n        for (int i = 0; i < TotalItems; ++i) {\n            while (!buffer.push(i)) {\n                std::this_thread::yield();\n\
+  \            }\n        }\n    });\n\n    std::vector<int> consumed;\n    consumed.reserve(TotalItems);\n\n    std::thread\
+  \ consumer([&]() {\n        for (int i = 0; i < TotalItems; ++i) {\n            int val = 0;\n            while (!buffer.pop(val))\
+  \ {\n                std::this_thread::yield();\n            }\n            consumed.push_back(val);\n        }\n    });\n\
+  \n    producer.join();\n    consumer.join();\n\n    EXPECT_EQ(consumed.size(), TotalItems);\n    for (int i = 0; i < TotalItems;\
+  \ ++i) {\n        EXPECT_EQ(consumed[i], i);\n    }\n}\n\nTEST(SpscRingBufferTest, AccurateCapacityReport) {\n    SpscRingBuffer<double,\
+  \ 64> buffer;\n    EXPECT_EQ(buffer.capacity(), 64);\n}\n"

@@ -1,0 +1,97 @@
+task_id: EF-PY-010
+title: Regex NFA State Machine Engine
+language: python
+difficulty: hard
+category: algorithmic
+tags:
+- regex
+- automata
+- nfa
+- compiler
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  - re
+  max_cyclomatic_complexity: 25
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Regex NFA State Machine Engine\n\nImplement a linear-time Regular Expression pattern matching engine based on Thompson's\
+  \ Non-deterministic Finite Automaton (NFA) construction.\n\n## Syntax Features Supported\n\n- **Literal characters**: e.g.\
+  \ `a`, `b`, `1`\n- **Wildcard character**: `.` matches any single character\n- **Concatenation**: e.g. `ab`\n- **Alternation**:\
+  \ `|` (e.g. `cat|dog`)\n- **Kleene Star**: `*` (zero or more occurrences)\n- **Plus Operator**: `+` (one or more occurrences)\n\
+  - **Optional Operator**: `?` (zero or one occurrence)\n- **Grouping**: `( ... )` to override operator precedence\n\n## Requirements\n\
+  \nImplement the class `RegexNFA`:\n\n- `compile(pattern: str) -> RegexNFA`:\n  Parses infix regex pattern into postfix using\
+  \ Dijkstra's Shunting-Yard algorithm (with explicit concatenation insertion), and compiles it into an NFA.\n- `matches(self,\
+  \ text: str) -> bool`:\n  Simulates NFA execution over `text` using epsilon-closure transitions. Returns `True` if the full\
+  \ text matches the pattern, `False` otherwise.\n- `find_all(self, text: str) -> list[str]`:\n  Finds all non-overlapping\
+  \ matching substrings within `text`.\n"
+starter_code: "class RegexNFA:\n    def __init__(self) -> None:\n        \"\"\"Initialize Regex NFA.\"\"\"\n        pass\n\
+  \n    @classmethod\n    def compile(cls, pattern: str) -> 'RegexNFA':\n        \"\"\"Compile regex pattern into Thompson\
+  \ NFA.\"\"\"\n        pass\n\n    def matches(self, text: str) -> bool:\n        \"\"\"Check if entire text matches regex\
+  \ pattern.\"\"\"\n        pass\n\n    def find_all(self, text: str) -> list[str]:\n        \"\"\"Find non-overlapping matching\
+  \ substrings.\"\"\"\n        pass\n"
+canonical_solution: "class _State:\n    def __init__(self, c: str | None = None) -> None:\n        self.c = c  # None for\
+  \ epsilon transition\n        self.out: list['_State'] = []\n\n\nclass RegexNFA:\n    def __init__(self, start: _State,\
+  \ accept: _State) -> None:\n        self.start = start\n        self.accept = accept\n\n    @classmethod\n    def compile(cls,\
+  \ pattern: str) -> 'RegexNFA':\n        # 1. Insert explicit concatenation operator '.'\n        formatted: list[str] =\
+  \ []\n        for i in range(len(pattern)):\n            c1 = pattern[i]\n            formatted.append(c1)\n           \
+  \ if i + 1 < len(pattern):\n                c2 = pattern[i + 1]\n                if (c1.isalnum() or c1 in \".*+?)\" ) and\
+  \ (c2.isalnum() or c2 in \".( \"):\n                    formatted.append(\"\\0\")  # explicit concat token\n\n        #\
+  \ 2. Infix to Postfix (Shunting Yard)\n        precedence = {\"|\": 1, \"\\0\": 2, \"*\": 3, \"+\": 3, \"?\": 3}\n     \
+  \   postfix: list[str] = []\n        ops: list[str] = []\n\n        for token in formatted:\n            if token == \"\
+  (\":\n                ops.append(token)\n            elif token == \")\":\n                while ops and ops[-1] != \"(\"\
+  :\n                    postfix.append(ops.pop())\n                if ops:\n                    ops.pop()  # remove '('\n\
+  \            elif token in precedence:\n                while ops and ops[-1] != \"(\" and precedence.get(ops[-1], 0) >=\
+  \ precedence[token]:\n                    postfix.append(ops.pop())\n                ops.append(token)\n            else:\n\
+  \                postfix.append(token)\n\n        while ops:\n            postfix.append(ops.pop())\n\n        # 3. Thompson\
+  \ NFA Construction from postfix\n        stack: list[tuple[_State, _State]] = []\n\n        for token in postfix:\n    \
+  \        if token == \"\\0\":\n                s2_start, s2_accept = stack.pop()\n                s1_start, s1_accept =\
+  \ stack.pop()\n                s1_accept.out.append(s2_start)\n                stack.append((s1_start, s2_accept))\n   \
+  \         elif token == \"|\":\n                s2_start, s2_accept = stack.pop()\n                s1_start, s1_accept =\
+  \ stack.pop()\n                start = _State(None)\n                accept = _State(None)\n                start.out =\
+  \ [s1_start, s2_start]\n                s1_accept.out.append(accept)\n                s2_accept.out.append(accept)\n   \
+  \             stack.append((start, accept))\n            elif token == \"*\":\n                s_start, s_accept = stack.pop()\n\
+  \                start = _State(None)\n                accept = _State(None)\n                start.out = [s_start, accept]\n\
+  \                s_accept.out = [s_start, accept]\n                stack.append((start, accept))\n            elif token\
+  \ == \"+\":\n                s_start, s_accept = stack.pop()\n                start = _State(None)\n                accept\
+  \ = _State(None)\n                start.out.append(s_start)\n                s_accept.out = [s_start, accept]\n        \
+  \        stack.append((start, accept))\n            elif token == \"?\":\n                s_start, s_accept = stack.pop()\n\
+  \                start = _State(None)\n                accept = _State(None)\n                start.out = [s_start, accept]\n\
+  \                s_accept.out.append(accept)\n                stack.append((start, accept))\n            else:\n       \
+  \         # literal or wildcard '.'\n                start = _State(token)\n                accept = _State(None)\n    \
+  \            start.out.append(accept)\n                stack.append((start, accept))\n\n        if not stack:\n        \
+  \    # Empty pattern matches empty text\n            s = _State(None)\n            return cls(s, s)\n\n        start, accept\
+  \ = stack.pop()\n        return cls(start, accept)\n\n    def _epsilon_closure(self, states: set[_State]) -> set[_State]:\n\
+  \        closure = set(states)\n        queue = list(states)\n        while queue:\n            curr = queue.pop()\n   \
+  \         if curr.c is None:\n                for nxt in curr.out:\n                    if nxt not in closure:\n       \
+  \                 closure.add(nxt)\n                        queue.append(nxt)\n        return closure\n\n    def matches(self,\
+  \ text: str) -> bool:\n        curr_states = self._epsilon_closure({self.start})\n        for char in text:\n          \
+  \  next_states: set[_State] = set()\n            for st in curr_states:\n                if st.c == \".\" or st.c == char:\n\
+  \                    for nxt in st.out:\n                        next_states.add(nxt)\n            curr_states = self._epsilon_closure(next_states)\n\
+  \            if not curr_states:\n                return False\n\n        return self.accept in curr_states\n\n    def find_all(self,\
+  \ text: str) -> list[str]:\n        results: list[str] = []\n        i = 0\n        n = len(text)\n        while i < n:\n\
+  \            matched_len = 0\n            for j in range(i + 1, n + 1):\n                sub = text[i:j]\n             \
+  \   if self.matches(sub):\n                    matched_len = j - i\n            if matched_len > 0:\n                results.append(text[i:\
+  \ i + matched_len])\n                i += matched_len\n            else:\n                i += 1\n        return results\n"
+visible_tests: "def test_regex_literals_and_alternation():\n    nfa = RegexNFA.compile(\"cat|dog\")\n    assert nfa.matches(\"\
+  cat\") is True\n    assert nfa.matches(\"dog\") is True\n    assert nfa.matches(\"bat\") is False\n\n\ndef test_regex_kleene_star_and_wildcard():\n\
+  \    nfa = RegexNFA.compile(\"a.*b\")\n    assert nfa.matches(\"ab\") is True\n    assert nfa.matches(\"axxxb\") is True\n\
+  \    assert nfa.matches(\"a123b\") is True\n    assert nfa.matches(\"axxx\") is False\n"
+hidden_tests: "def test_regex_plus_and_optional():\n    nfa = RegexNFA.compile(\"a+b?\")\n    assert nfa.matches(\"a\") is\
+  \ True\n    assert nfa.matches(\"ab\") is True\n    assert nfa.matches(\"aaaab\") is True\n    assert nfa.matches(\"b\"\
+  ) is False\n    assert nfa.matches(\"\") is False\n\n\ndef test_regex_grouping_precedence():\n    nfa = RegexNFA.compile(\"\
+  (ab|cd)+e\")\n    assert nfa.matches(\"abe\") is True\n    assert nfa.matches(\"cde\") is True\n    assert nfa.matches(\"\
+  abcdabe\") is True\n    assert nfa.matches(\"e\") is False\n\n\ndef test_regex_find_all():\n    nfa = RegexNFA.compile(\"\
+  ab*\")\n    matches = nfa.find_all(\"abb c abb d a\")\n    assert matches == [\"abb\", \"abb\", \"a\"]\n\n\ndef test_empty_string_matching():\n\
+  \    nfa = RegexNFA.compile(\"a*\")\n    assert nfa.matches(\"\") is True\n    assert nfa.matches(\"aaa\") is True\n\n\n\
+  def test_no_catastrophic_backtracking():\n    # Famous regex trap that causes exponential time in backtracking engines\n\
+  \    nfa = RegexNFA.compile(\"(a|aa)*b\")\n    assert nfa.matches(\"a\" * 30 + \"c\") is False\n    assert nfa.matches(\"\
+  a\" * 30 + \"b\") is True\n\n\ndef test_wildcard_dot_only():\n    nfa = RegexNFA.compile(\"...\")\n    assert nfa.matches(\"\
+  xyz\") is True\n    assert nfa.matches(\"123\") is True\n    assert nfa.matches(\"ab\") is False\n    assert nfa.matches(\"\
+  abcd\") is False\n"

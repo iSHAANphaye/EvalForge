@@ -1,0 +1,91 @@
+task_id: EF-PY-015
+title: Maximum Flow Edmonds-Karp Algorithm
+language: python
+difficulty: hard
+category: algorithmic
+tags:
+- max-flow
+- edmonds-karp
+- graph
+- min-cut
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Maximum Flow Edmonds-Karp Algorithm\n\nImplement the Edmonds-Karp algorithm (BFS-based implementation of Ford-Fulkerson)\
+  \ to compute maximum flow, edge flows, and the minimum cut in a directed capacitated network.\n\n## Requirements\n\nImplement\
+  \ the class `MaxFlowNetwork`:\n\n- `__init__(self, vertices: list[Any] | None = None)`:\n  Initializes network with optional\
+  \ vertex set.\n- `add_edge(self, u: Any, v: Any, capacity: float) -> None`:\n  Adds a directed capacity edge from `u` to\
+  \ `v` (`capacity >= 0`).\n  If an edge already exists, adds to its existing capacity.\n- `compute_max_flow(self, source:\
+  \ Any, sink: Any) -> float`:\n  Computes and returns the maximum flow achievable from `source` to `sink`.\n  Raises `ValueError`\
+  \ if `source == sink` or if either vertex is not in the network.\n- `get_flow_on_edge(self, u: Any, v: Any) -> float`:\n\
+  \  Returns the net flow passing through edge `u -> v` after running `compute_max_flow`.\n- `get_min_cut(self, source: Any,\
+  \ sink: Any) -> tuple[set[Any], set[Any]]`:\n  Finds the minimum $s-t$ cut partition `(S, T)` where $source \\in S$ and\
+  \ $sink \\in T$, such that the capacity of edges from $S$ to $T$ equals the maximum flow.\n"
+starter_code: "from typing import Any\n\n\nclass MaxFlowNetwork:\n    def __init__(self, vertices: list[Any] | None = None)\
+  \ -> None:\n        \"\"\"Initialize max flow capacity network.\"\"\"\n        pass\n\n    def add_edge(self, u: Any, v:\
+  \ Any, capacity: float) -> None:\n        \"\"\"Add directed edge with capacity.\"\"\"\n        pass\n\n    def compute_max_flow(self,\
+  \ source: Any, sink: Any) -> float:\n        \"\"\"Compute maximum flow from source to sink using Edmonds-Karp.\"\"\"\n\
+  \        pass\n\n    def get_flow_on_edge(self, u: Any, v: Any) -> float:\n        \"\"\"Return net flow on edge u -> v.\"\
+  \"\"\n        pass\n\n    def get_min_cut(self, source: Any, sink: Any) -> tuple[set[Any], set[Any]]:\n        \"\"\"Return\
+  \ (S, T) vertex partition forming the min-cut.\"\"\"\n        pass\n"
+canonical_solution: "from collections import deque\nfrom typing import Any\n\n\nclass MaxFlowNetwork:\n    def __init__(self,\
+  \ vertices: list[Any] | None = None) -> None:\n        self.vertices: set[Any] = set(vertices or [])\n        self.capacity:\
+  \ dict[tuple[Any, Any], float] = {}\n        self.flow: dict[tuple[Any, Any], float] = {}\n        self.adj: dict[Any, set[Any]]\
+  \ = {}\n\n    def add_edge(self, u: Any, v: Any, capacity: float) -> None:\n        if capacity < 0:\n            raise\
+  \ ValueError(\"Capacity cannot be negative\")\n        self.vertices.add(u)\n        self.vertices.add(v)\n        self.adj.setdefault(u,\
+  \ set()).add(v)\n        self.adj.setdefault(v, set()).add(u)\n\n        self.capacity[(u, v)] = self.capacity.get((u, v),\
+  \ 0.0) + float(capacity)\n        self.capacity.setdefault((v, u), 0.0)\n        self.flow.setdefault((u, v), 0.0)\n   \
+  \     self.flow.setdefault((v, u), 0.0)\n\n    def _bfs_find_path(self, source: Any, sink: Any, parent: dict[Any, Any])\
+  \ -> float:\n        parent.clear()\n        queue = deque([source])\n        parent[source] = source\n\n        while queue:\n\
+  \            curr = queue.popleft()\n            if curr == sink:\n                break\n            for nxt in self.adj.get(curr,\
+  \ set()):\n                residual = self.capacity.get((curr, nxt), 0.0) - self.flow.get((curr, nxt), 0.0)\n          \
+  \      if residual > 1e-9 and nxt not in parent:\n                    parent[nxt] = curr\n                    queue.append(nxt)\n\
+  \n        if sink not in parent:\n            return 0.0\n\n        # Find bottleneck capacity along augmenting path\n \
+  \       bottleneck = float('inf')\n        curr = sink\n        while curr != source:\n            prev = parent[curr]\n\
+  \            residual = self.capacity[(prev, curr)] - self.flow[(prev, curr)]\n            bottleneck = min(bottleneck,\
+  \ residual)\n            curr = prev\n\n        return bottleneck\n\n    def compute_max_flow(self, source: Any, sink: Any)\
+  \ -> float:\n        if source == sink:\n            raise ValueError(\"Source and sink cannot be identical\")\n       \
+  \ if source not in self.vertices or sink not in self.vertices:\n            raise ValueError(\"Source or sink not in network\"\
+  )\n\n        # Reset flows\n        for edge in self.flow:\n            self.flow[edge] = 0.0\n\n        max_flow = 0.0\n\
+  \        parent: dict[Any, Any] = {}\n\n        while True:\n            push = self._bfs_find_path(source, sink, parent)\n\
+  \            if push <= 1e-9:\n                break\n            max_flow += push\n            curr = sink\n          \
+  \  while curr != source:\n                prev = parent[curr]\n                self.flow[(prev, curr)] += push\n       \
+  \         self.flow[(curr, prev)] -= push\n                curr = prev\n\n        return max_flow\n\n    def get_flow_on_edge(self,\
+  \ u: Any, v: Any) -> float:\n        return max(0.0, self.flow.get((u, v), 0.0))\n\n    def get_min_cut(self, source: Any,\
+  \ sink: Any) -> tuple[set[Any], set[Any]]:\n        self.compute_max_flow(source, sink)\n        visited = set()\n     \
+  \   queue = deque([source])\n        visited.add(source)\n\n        while queue:\n            curr = queue.popleft()\n \
+  \           for nxt in self.adj.get(curr, set()):\n                residual = self.capacity.get((curr, nxt), 0.0) - self.flow.get((curr,\
+  \ nxt), 0.0)\n                if residual > 1e-9 and nxt not in visited:\n                    visited.add(nxt)\n       \
+  \             queue.append(nxt)\n\n        s_set = visited\n        t_set = self.vertices - s_set\n        return s_set,\
+  \ t_set\n"
+visible_tests: "def test_max_flow_diamond_network():\n    net = MaxFlowNetwork()\n    net.add_edge(\"s\", \"u\", 10)\n   \
+  \ net.add_edge(\"s\", \"v\", 5)\n    net.add_edge(\"u\", \"v\", 15)\n    net.add_edge(\"u\", \"t\", 10)\n    net.add_edge(\"\
+  v\", \"t\", 10)\n\n    flow = net.compute_max_flow(\"s\", \"t\")\n    assert flow == 15.0\n\n\ndef test_min_cut_partition():\n\
+  \    net = MaxFlowNetwork()\n    net.add_edge(\"s\", \"a\", 3)\n    net.add_edge(\"a\", \"t\", 2)\n\n    flow = net.compute_max_flow(\"\
+  s\", \"t\")\n    assert flow == 2.0\n    s_set, t_set = net.get_min_cut(\"s\", \"t\")\n    assert \"s\" in s_set\n    assert\
+  \ \"t\" in t_set\n"
+hidden_tests: "import pytest\n\n\ndef test_identical_source_sink_raises():\n    net = MaxFlowNetwork()\n    net.add_edge(\"\
+  A\", \"B\", 5)\n    with pytest.raises(ValueError):\n        net.compute_max_flow(\"A\", \"A\")\n\n\ndef test_disconnected_source_sink():\n\
+  \    net = MaxFlowNetwork()\n    net.add_edge(\"A\", \"B\", 10)\n    net.add_edge(\"C\", \"D\", 10)\n    assert net.compute_max_flow(\"\
+  A\", \"D\") == 0.0\n\n\ndef test_multiple_parallel_paths():\n    net = MaxFlowNetwork()\n    net.add_edge(\"s\", \"a1\"\
+  , 10)\n    net.add_edge(\"a1\", \"t\", 10)\n    net.add_edge(\"s\", \"a2\", 20)\n    net.add_edge(\"a2\", \"t\", 20)\n \
+  \   net.add_edge(\"s\", \"a3\", 30)\n    net.add_edge(\"a3\", \"t\", 30)\n    assert net.compute_max_flow(\"s\", \"t\")\
+  \ == 60.0\n\n\ndef test_flow_conservation():\n    net = MaxFlowNetwork()\n    net.add_edge(\"s\", \"1\", 10)\n    net.add_edge(\"\
+  s\", \"2\", 10)\n    net.add_edge(\"1\", \"3\", 8)\n    net.add_edge(\"2\", \"3\", 8)\n    net.add_edge(\"3\", \"t\", 20)\n\
+  \n    flow = net.compute_max_flow(\"s\", \"t\")\n    assert flow == 16.0\n    # Inflow at 3 must equal outflow at 3\n  \
+  \  inflow = net.get_flow_on_edge(\"1\", \"3\") + net.get_flow_on_edge(\"2\", \"3\")\n    outflow = net.get_flow_on_edge(\"\
+  3\", \"t\")\n    assert inflow == outflow == 16.0\n\n\ndef test_edge_flow_tracking():\n    net = MaxFlowNetwork()\n    net.add_edge(\"\
+  A\", \"B\", 5)\n    net.add_edge(\"B\", \"C\", 3)\n    net.compute_max_flow(\"A\", \"C\")\n    assert net.get_flow_on_edge(\"\
+  A\", \"B\") == 3.0\n    assert net.get_flow_on_edge(\"B\", \"C\") == 3.0\n\n\ndef test_scale_bipartite_matching():\n   \
+  \ net = MaxFlowNetwork()\n    n = 20\n    # Left partition L0..L19, Right partition R0..R19\n    for i in range(n):\n  \
+  \      net.add_edge(\"source\", f\"L{i}\", 1.0)\n        net.add_edge(f\"R{i}\", \"sink\", 1.0)\n        net.add_edge(f\"\
+  L{i}\", f\"R{i}\", 1.0)\n    assert net.compute_max_flow(\"source\", \"sink\") == 20.0\n"

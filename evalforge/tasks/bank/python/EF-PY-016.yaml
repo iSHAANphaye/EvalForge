@@ -1,0 +1,99 @@
+task_id: EF-PY-016
+title: Interval Tree with Overlap Search and Merging
+language: python
+difficulty: medium
+category: data_structures
+tags:
+- interval-tree
+- data_structures
+- intervals
+- geometric
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Interval Tree with Overlap Search and Merging\n\nImplement an augmented binary search tree (Interval Tree) for\
+  \ efficient 1D interval storage, overlap querying, and interval union merging.\n\n## Requirements\n\nImplement the dataclass\
+  \ `Interval`:\n- `low: float`\n- `high: float`\n- `data: Any = None`\n- Two intervals `[l1, h1]` and `[l2, h2]` overlap\
+  \ if `max(l1, l2) <= min(h1, h2)`.\n\nImplement the class `IntervalTree`:\n\n- `insert(self, low: float, high: float, data:\
+  \ Any = None) -> None`:\n  Inserts an interval `[low, high]` into the tree (`low <= high`).\n- `search_overlaps(self, low:\
+  \ float, high: float) -> list[Interval]`:\n  Finds all intervals in the tree that overlap with the query interval `[low,\
+  \ high]`.\n  Returns a list of `Interval` objects sorted by `low` then `high`.\n- `delete(self, low: float, high: float)\
+  \ -> bool`:\n  Removes the first interval exactly matching `[low, high]`. Returns `True` if found and deleted, `False` otherwise.\n\
+  - `merge_overlapping(self) -> list[Interval]`:\n  Returns a merged list of contiguous/overlapping intervals covering the\
+  \ exact same set of points, sorted by `low`.\n- `to_list(self) -> list[Interval]`:\n  Returns all stored intervals sorted\
+  \ by `low` then `high`.\n"
+starter_code: "from dataclasses import dataclass\nfrom typing import Any\n\n\n@dataclass\nclass Interval:\n    low: float\n\
+  \    high: float\n    data: Any = None\n\n\nclass IntervalTree:\n    def __init__(self) -> None:\n        \"\"\"Initialize\
+  \ empty Interval Tree.\"\"\"\n        pass\n\n    def insert(self, low: float, high: float, data: Any = None) -> None:\n\
+  \        \"\"\"Insert interval [low, high].\"\"\"\n        pass\n\n    def search_overlaps(self, low: float, high: float)\
+  \ -> list[Interval]:\n        \"\"\"Return all intervals overlapping [low, high] sorted.\"\"\"\n        pass\n\n    def\
+  \ delete(self, low: float, high: float) -> bool:\n        \"\"\"Delete matching interval [low, high].\"\"\"\n        pass\n\
+  \n    def merge_overlapping(self) -> list[Interval]:\n        \"\"\"Merge all overlapping intervals into minimal disjoint\
+  \ intervals.\"\"\"\n        pass\n\n    def to_list(self) -> list[Interval]:\n        \"\"\"Return all intervals sorted.\"\
+  \"\"\n        pass\n"
+canonical_solution: "from dataclasses import dataclass\nfrom typing import Any\n\n\n@dataclass\nclass Interval:\n    low:\
+  \ float\n    high: float\n    data: Any = None\n\n\nclass _Node:\n    def __init__(self, interval: Interval) -> None:\n\
+  \        self.interval = interval\n        self.max_high = interval.high\n        self.left: '_Node | None' = None\n   \
+  \     self.right: '_Node | None' = None\n\n\nclass IntervalTree:\n    def __init__(self) -> None:\n        self.root: _Node\
+  \ | None = None\n\n    def insert(self, low: float, high: float, data: Any = None) -> None:\n        if low > high:\n  \
+  \          raise ValueError(f\"Invalid interval: low ({low}) > high ({high})\")\n        interval = Interval(float(low),\
+  \ float(high), data)\n        self.root = self._insert(self.root, interval)\n\n    def _insert(self, node: _Node | None,\
+  \ interval: Interval) -> _Node:\n        if node is None:\n            return _Node(interval)\n\n        if interval.low\
+  \ < node.interval.low:\n            node.left = self._insert(node.left, interval)\n        else:\n            node.right\
+  \ = self._insert(node.right, interval)\n\n        node.max_high = max(\n            node.interval.high,\n            node.left.max_high\
+  \ if node.left else float('-inf'),\n            node.right.max_high if node.right else float('-inf')\n        )\n      \
+  \  return node\n\n    def search_overlaps(self, low: float, high: float) -> list[Interval]:\n        results: list[Interval]\
+  \ = []\n\n        def _search(node: _Node | None) -> None:\n            if node is None:\n                return\n     \
+  \       if node.max_high < low:\n                return\n\n            if max(node.interval.low, low) <= min(node.interval.high,\
+  \ high):\n                results.append(node.interval)\n\n            if node.left and node.left.max_high >= low:\n   \
+  \             _search(node.left)\n\n            if node.interval.low <= high:\n                _search(node.right)\n\n \
+  \       _search(self.root)\n        return sorted(results, key=lambda x: (x.low, x.high))\n\n    def to_list(self) -> list[Interval]:\n\
+  \        results: list[Interval] = []\n\n        def _inorder(node: _Node | None) -> None:\n            if node is None:\n\
+  \                return\n            _inorder(node.left)\n            results.append(node.interval)\n            _inorder(node.right)\n\
+  \n        _inorder(self.root)\n        return sorted(results, key=lambda x: (x.low, x.high))\n\n    def delete(self, low:\
+  \ float, high: float) -> bool:\n        deleted = False\n\n        def _delete(node: _Node | None) -> _Node | None:\n  \
+  \          nonlocal deleted\n            if node is None:\n                return None\n\n            if low == node.interval.low\
+  \ and high == node.interval.high and not deleted:\n                deleted = True\n                if node.left is None:\n\
+  \                    return node.right\n                if node.right is None:\n                    return node.left\n\n\
+  \                # Find in-order successor\n                succ = node.right\n                while succ.left is not None:\n\
+  \                    succ = succ.left\n                node.interval = succ.interval\n                node.right = _delete_exact(node.right,\
+  \ succ.interval.low, succ.interval.high)\n            elif low < node.interval.low:\n                node.left = _delete(node.left)\n\
+  \            else:\n                node.right = _delete(node.right)\n\n            node.max_high = max(\n             \
+  \   node.interval.high,\n                node.left.max_high if node.left else float('-inf'),\n                node.right.max_high\
+  \ if node.right else float('-inf')\n            )\n            return node\n\n        def _delete_exact(node: _Node | None,\
+  \ l: float, h: float) -> _Node | None:\n            if node is None:\n                return None\n            if node.interval.low\
+  \ == l and node.interval.high == h:\n                return node.right\n            node.left = _delete_exact(node.left,\
+  \ l, h)\n            node.max_high = max(\n                node.interval.high,\n                node.left.max_high if node.left\
+  \ else float('-inf'),\n                node.right.max_high if node.right else float('-inf')\n            )\n           \
+  \ return node\n\n        self.root = _delete(self.root)\n        return deleted\n\n    def merge_overlapping(self) -> list[Interval]:\n\
+  \        intervals = self.to_list()\n        if not intervals:\n            return []\n\n        merged: list[Interval]\
+  \ = [Interval(intervals[0].low, intervals[0].high)]\n        for current in intervals[1:]:\n            prev = merged[-1]\n\
+  \            if current.low <= prev.high:\n                prev.high = max(prev.high, current.high)\n            else:\n\
+  \                merged.append(Interval(current.low, current.high))\n\n        return merged\n"
+visible_tests: "def test_interval_tree_insert_search():\n    tree = IntervalTree()\n    tree.insert(15, 20)\n    tree.insert(10,\
+  \ 30)\n    tree.insert(17, 19)\n    tree.insert(5, 20)\n    tree.insert(12, 15)\n    tree.insert(30, 40)\n\n    overlaps\
+  \ = tree.search_overlaps(6, 7)\n    ranges = [(iv.low, iv.high) for iv in overlaps]\n    assert (5.0, 20.0) in ranges\n\
+  \    assert (10.0, 30.0) not in ranges\n\n\ndef test_merge_overlapping_intervals():\n    tree = IntervalTree()\n    tree.insert(1,\
+  \ 3)\n    tree.insert(2, 6)\n    tree.insert(8, 10)\n    tree.insert(15, 18)\n\n    merged = tree.merge_overlapping()\n\
+  \    assert [(m.low, m.high) for m in merged] == [(1.0, 6.0), (8.0, 10.0), (15.0, 18.0)]\n"
+hidden_tests: "import pytest\n\n\ndef test_single_point_overlap():\n    tree = IntervalTree()\n    tree.insert(10, 20)\n \
+  \   tree.insert(20, 30)\n    overlaps = tree.search_overlaps(20, 20)\n    assert len(overlaps) == 2\n\n\ndef test_delete_interval():\n\
+  \    tree = IntervalTree()\n    tree.insert(10, 20)\n    tree.insert(15, 25)\n    assert tree.delete(10, 20) is True\n \
+  \   assert tree.delete(10, 20) is False\n    assert [(iv.low, iv.high) for iv in tree.to_list()] == [(15.0, 25.0)]\n\n\n\
+  def test_empty_tree_operations():\n    tree = IntervalTree()\n    assert tree.search_overlaps(0, 10) == []\n    assert tree.merge_overlapping()\
+  \ == []\n    assert tree.delete(1, 2) is False\n\n\ndef test_fully_contained_intervals():\n    tree = IntervalTree()\n \
+  \   tree.insert(0, 100)\n    tree.insert(20, 40)\n    tree.insert(60, 80)\n    merged = tree.merge_overlapping()\n    assert\
+  \ len(merged) == 1\n    assert (merged[0].low, merged[0].high) == (0.0, 100.0)\n\n\ndef test_invalid_interval_raises():\n\
+  \    tree = IntervalTree()\n    with pytest.raises(ValueError):\n        tree.insert(20, 10)\n\n\ndef test_scale_intervals():\n\
+  \    tree = IntervalTree()\n    for i in range(100):\n        tree.insert(i * 10, i * 10 + 5)\n    assert len(tree.to_list())\
+  \ == 100\n    overlaps = tree.search_overlaps(24, 32)\n    # Overlaps [20, 25] and [30, 35]\n    assert len(overlaps) ==\
+  \ 2\n"

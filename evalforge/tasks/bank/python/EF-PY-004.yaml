@@ -1,0 +1,82 @@
+task_id: EF-PY-004
+title: Trie with Wildcard Prefix Search
+language: python
+difficulty: medium
+category: data_structures
+tags:
+- trie
+- prefix-tree
+- wildcard
+- data_structures
+- search
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Trie with Wildcard Prefix Search\n\nImplement an efficient prefix tree (Trie) that supports exact word matching,\
+  \ prefix matching, and wildcard queries where the dot character (`'.'`) matches any single character.\n\n## Requirements\n\
+  \nImplement the class `WildcardTrie`:\n\n- `insert(self, word: str) -> None`:\n  Inserts `word` into the trie.\n- `search(self,\
+  \ word: str) -> bool`:\n  Returns `True` if `word` exists in the trie (exact match), `False` otherwise.\n- `starts_with(self,\
+  \ prefix: str) -> bool`:\n  Returns `True` if there is any word in the trie that starts with the given `prefix` (exact characters),\
+  \ `False` otherwise.\n- `search_wildcard(self, pattern: str) -> list[str]`:\n  Finds all complete words in the trie matching\
+  \ `pattern`, where `'.'` matches any single character.\n  The length of matching words must equal the length of `pattern`.\n\
+  \  Returns a lexicographically sorted list of unique matching words.\n- `prefix_wildcard(self, pattern: str) -> list[str]`:\n\
+  \  Finds all words in the trie that have a prefix matching `pattern` (where `'.'` matches any character).\n  Returns a lexicographically\
+  \ sorted list of unique words.\n"
+starter_code: "class WildcardTrie:\n    def __init__(self) -> None:\n        \"\"\"Initialize empty Wildcard Trie.\"\"\"\n\
+  \        pass\n\n    def insert(self, word: str) -> None:\n        \"\"\"Insert word into trie.\"\"\"\n        pass\n\n\
+  \    def search(self, word: str) -> bool:\n        \"\"\"Check if word exists in trie.\"\"\"\n        pass\n\n    def starts_with(self,\
+  \ prefix: str) -> bool:\n        \"\"\"Check if any word starts with prefix.\"\"\"\n        pass\n\n    def search_wildcard(self,\
+  \ pattern: str) -> list[str]:\n        \"\"\"Search for complete words matching wildcard pattern (. matches any char).\"\
+  \"\"\n        pass\n\n    def prefix_wildcard(self, pattern: str) -> list[str]:\n        \"\"\"Search for words with prefix\
+  \ matching wildcard pattern.\"\"\"\n        pass\n"
+canonical_solution: "class _TrieNode:\n    def __init__(self) -> None:\n        self.children: dict[str, _TrieNode] = {}\n\
+  \        self.is_end: bool = False\n        self.word: str | None = None\n\n\nclass WildcardTrie:\n    def __init__(self)\
+  \ -> None:\n        self.root = _TrieNode()\n\n    def insert(self, word: str) -> None:\n        node = self.root\n    \
+  \    for char in word:\n            if char not in node.children:\n                node.children[char] = _TrieNode()\n \
+  \           node = node.children[char]\n        node.is_end = True\n        node.word = word\n\n    def search(self, word:\
+  \ str) -> bool:\n        node = self.root\n        for char in word:\n            if char not in node.children:\n      \
+  \          return False\n            node = node.children[char]\n        return node.is_end\n\n    def starts_with(self,\
+  \ prefix: str) -> bool:\n        node = self.root\n        for char in prefix:\n            if char not in node.children:\n\
+  \                return False\n            node = node.children[char]\n        return True\n\n    def search_wildcard(self,\
+  \ pattern: str) -> list[str]:\n        results: list[str] = []\n\n        def dfs(node: _TrieNode, idx: int) -> None:\n\
+  \            if idx == len(pattern):\n                if node.is_end and node.word is not None:\n                    results.append(node.word)\n\
+  \                return\n\n            char = pattern[idx]\n            if char == \".\":\n                for child in\
+  \ node.children.values():\n                    dfs(child, idx + 1)\n            else:\n                if char in node.children:\n\
+  \                    dfs(node.children[char], idx + 1)\n\n        dfs(self.root, 0)\n        return sorted(results)\n\n\
+  \    def prefix_wildcard(self, pattern: str) -> list[str]:\n        matching_nodes: list[_TrieNode] = []\n\n        def\
+  \ dfs_pattern(node: _TrieNode, idx: int) -> None:\n            if idx == len(pattern):\n                matching_nodes.append(node)\n\
+  \                return\n\n            char = pattern[idx]\n            if char == \".\":\n                for child in\
+  \ node.children.values():\n                    dfs_pattern(child, idx + 1)\n            else:\n                if char in\
+  \ node.children:\n                    dfs_pattern(node.children[char], idx + 1)\n\n        dfs_pattern(self.root, 0)\n\n\
+  \        results: list[str] = []\n\n        def collect_words(node: _TrieNode) -> None:\n            if node.is_end and\
+  \ node.word is not None:\n                results.append(node.word)\n            for child in node.children.values():\n\
+  \                collect_words(child)\n\n        for n in matching_nodes:\n            collect_words(n)\n\n        return\
+  \ sorted(set(results))\n"
+visible_tests: "def test_trie_insert_and_exact_search():\n    trie = WildcardTrie()\n    trie.insert(\"apple\")\n    trie.insert(\"\
+  app\")\n    assert trie.search(\"apple\") is True\n    assert trie.search(\"app\") is True\n    assert trie.search(\"appl\"\
+  ) is False\n    assert trie.starts_with(\"app\") is True\n    assert trie.starts_with(\"ban\") is False\n\n\ndef test_trie_wildcard_search():\n\
+  \    trie = WildcardTrie()\n    for w in [\"cat\", \"bat\", \"rat\", \"bar\", \"car\", \"cattle\"]:\n        trie.insert(w)\n\
+  \n    assert trie.search_wildcard(\".at\") == [\"bat\", \"cat\", \"rat\"]\n    assert trie.search_wildcard(\"c.r\") == [\"\
+  car\"]\n    assert trie.search_wildcard(\"....\") == []\n"
+hidden_tests: "def test_prefix_wildcard_search():\n    trie = WildcardTrie()\n    words = [\"flower\", \"flow\", \"flight\"\
+  , \"flat\", \"blow\", \"blue\"]\n    for w in words:\n        trie.insert(w)\n\n    assert trie.prefix_wildcard(\"fl.\"\
+  ) == [\"flat\", \"flight\", \"flow\", \"flower\"]\n    assert trie.prefix_wildcard(\"bl..\") == [\"blow\", \"blue\"]\n\n\
+  \ndef test_empty_string_and_single_char():\n    trie = WildcardTrie()\n    trie.insert(\"a\")\n    trie.insert(\"b\")\n\
+  \    assert trie.search_wildcard(\".\") == [\"a\", \"b\"]\n    assert trie.search(\"a\") is True\n    assert trie.search(\"\
+  c\") is False\n\n\ndef test_all_wildcard_pattern():\n    trie = WildcardTrie()\n    words = [\"cat\", \"dog\", \"fox\",\
+  \ \"ant\", \"bee\"]\n    for w in words:\n        trie.insert(w)\n    assert trie.search_wildcard(\"...\") == sorted(words)\n\
+  \n\ndef test_no_matches_wildcard():\n    trie = WildcardTrie()\n    trie.insert(\"hello\")\n    trie.insert(\"world\")\n\
+  \    assert trie.search_wildcard(\".....z\") == []\n    assert trie.search_wildcard(\"z....\") == []\n\n\ndef test_duplicate_insertions():\n\
+  \    trie = WildcardTrie()\n    trie.insert(\"repeat\")\n    trie.insert(\"repeat\")\n    assert trie.search(\"repeat\"\
+  ) is True\n    assert trie.search_wildcard(\"re....\") == [\"repeat\"]\n\n\ndef test_large_dictionary_scale():\n    trie\
+  \ = WildcardTrie()\n    for i in range(1000):\n        trie.insert(f\"item_{i:04d}\")\n    assert trie.search(\"item_0500\"\
+  ) is True\n    assert trie.search(\"item_9999\") is False\n    matches = trie.search_wildcard(\"item_00..\")\n    assert\
+  \ len(matches) == 100\n"

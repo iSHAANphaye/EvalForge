@@ -1,0 +1,112 @@
+task_id: EF-CPP-009
+title: Radix Tree (Patricia Trie) with Edge Compression in C++20
+language: cpp
+difficulty: hard
+category: data_structures
+tags:
+- radix-tree
+- patricia-trie
+- trie
+- data_structures
+- cpp20
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Radix Tree (Patricia Trie) with Edge Compression in C++20\n\nImplement a Radix Tree (compacted prefix tree) in\
+  \ C++20 where edges represent variable-length common prefixes, supporting insertion, edge splitting, deletion, and prefix\
+  \ queries.\n\n## Requirements\n\nImplement the class `RadixTree`:\n\n- `void insert(std::string_view key, int value)`:\n\
+  \  Inserts `(key, value)`. If `key` already exists, updates value. Splits edges when keys diverge mid-edge.\n- `[[nodiscard]]\
+  \ std::optional<int> find(std::string_view key) const`:\n  Returns value if exact `key` is stored in the tree, or `std::nullopt`\
+  \ otherwise.\n- `bool remove(std::string_view key)`:\n  Deletes `key`. Merges redundant single-child parent edges if applicable.\
+  \ Returns `true` if found and deleted, `false` otherwise.\n- `[[nodiscard]] std::vector<std::string> keys_with_prefix(std::string_view\
+  \ prefix) const`:\n  Returns all keys in the tree starting with `prefix` in lexicographical order.\n- `[[nodiscard]] size_t\
+  \ size() const noexcept`:\n  Returns number of unique keys stored.\n"
+starter_code: "#pragma once\n#include <cstddef>\n#include <optional>\n#include <string>\n#include <string_view>\n#include\
+  \ <vector>\n\nclass RadixTree {\npublic:\n    RadixTree() = default;\n\n    void insert(std::string_view key, int value);\n\
+  \    [[nodiscard]] std::optional<int> find(std::string_view key) const;\n    bool remove(std::string_view key);\n    [[nodiscard]]\
+  \ std::vector<std::string> keys_with_prefix(std::string_view prefix) const;\n    [[nodiscard]] size_t size() const noexcept;\n\
+  };\n"
+canonical_solution: "#pragma once\n#include <algorithm>\n#include <cstddef>\n#include <map>\n#include <memory>\n#include <optional>\n\
+  #include <string>\n#include <string_view>\n#include <vector>\n\nclass RadixTree {\n    struct Node {\n        std::string\
+  \ edge_label;\n        std::optional<int> value;\n        std::map<char, std::unique_ptr<Node>> children;\n\n        bool\
+  \ is_leaf() const {\n            return children.empty();\n        }\n    };\n\npublic:\n    RadixTree() : root_(std::make_unique<Node>()),\
+  \ size_(0) {}\n\n    void insert(std::string_view key, int value) {\n        Node* curr = root_.get();\n        std::string_view\
+  \ rem = key;\n\n        while (true) {\n            if (rem.empty()) {\n                if (!curr->value.has_value()) {\n\
+  \                    size_++;\n                }\n                curr->value = value;\n                return;\n      \
+  \      }\n\n            char first = rem[0];\n            auto it = curr->children.find(first);\n            if (it == curr->children.end())\
+  \ {\n                // No matching child, create new edge\n                auto child = std::make_unique<Node>();\n   \
+  \             child->edge_label = std::string(rem);\n                child->value = value;\n                curr->children[first]\
+  \ = std::move(child);\n                size_++;\n                return;\n            }\n\n            Node* child = it->second.get();\n\
+  \            std::string_view edge = child->edge_label;\n\n            // Find common prefix length\n            size_t\
+  \ common = 0;\n            size_t min_len = std::min(rem.size(), edge.size());\n            while (common < min_len && rem[common]\
+  \ == edge[common]) {\n                common++;\n            }\n\n            if (common < edge.size()) {\n            \
+  \    // Split edge\n                auto split_node = std::make_unique<Node>();\n                split_node->edge_label\
+  \ = edge.substr(0, common);\n\n                child->edge_label = edge.substr(common);\n                split_node->children[child->edge_label[0]]\
+  \ = std::move(it->second);\n\n                if (common == rem.size()) {\n                    split_node->value = value;\n\
+  \                    size_++;\n                } else {\n                    auto new_child = std::make_unique<Node>();\n\
+  \                    new_child->edge_label = std::string(rem.substr(common));\n                    new_child->value = value;\n\
+  \                    split_node->children[new_child->edge_label[0]] = std::move(new_child);\n                    size_++;\n\
+  \                }\n\n                curr->children[first] = std::move(split_node);\n                return;\n        \
+  \    }\n\n            // Exactly matches or extends edge\n            rem = rem.substr(common);\n            curr = child;\n\
+  \        }\n    }\n\n    [[nodiscard]] std::optional<int> find(std::string_view key) const {\n        const Node* curr =\
+  \ root_.get();\n        std::string_view rem = key;\n\n        while (curr) {\n            if (rem.empty()) {\n        \
+  \        return curr->value;\n            }\n\n            char first = rem[0];\n            auto it = curr->children.find(first);\n\
+  \            if (it == curr->children.end()) {\n                return std::nullopt;\n            }\n\n            const\
+  \ Node* child = it->second.get();\n            std::string_view edge = child->edge_label;\n\n            if (!rem.starts_with(edge))\
+  \ {\n                return std::nullopt;\n            }\n\n            rem = rem.substr(edge.size());\n            curr\
+  \ = child;\n        }\n\n        return std::nullopt;\n    }\n\n    bool remove(std::string_view key) {\n        bool deleted\
+  \ = false;\n        root_ = remove_helper(std::move(root_), key, deleted);\n        if (deleted) {\n            size_--;\n\
+  \        }\n        return deleted;\n    }\n\n    [[nodiscard]] std::vector<std::string> keys_with_prefix(std::string_view\
+  \ prefix) const {\n        std::vector<std::string> results;\n        const Node* curr = root_.get();\n        std::string_view\
+  \ rem = prefix;\n        std::string built_prefix;\n\n        while (!rem.empty() && curr) {\n            char first = rem[0];\n\
+  \            auto it = curr->children.find(first);\n            if (it == curr->children.end()) {\n                return\
+  \ {};\n            }\n\n            const Node* child = it->second.get();\n            std::string_view edge = child->edge_label;\n\
+  \n            if (rem.size() < edge.size()) {\n                if (edge.starts_with(rem)) {\n                    built_prefix\
+  \ += edge;\n                    collect_all(child, built_prefix, results);\n                    std::sort(results.begin(),\
+  \ results.end());\n                    return results;\n                }\n                return {};\n            }\n\n\
+  \            if (!rem.starts_with(edge)) {\n                return {};\n            }\n\n            built_prefix += edge;\n\
+  \            rem = rem.substr(edge.size());\n            curr = child;\n        }\n\n        if (curr) {\n            collect_all(curr,\
+  \ built_prefix, results);\n        }\n\n        std::sort(results.begin(), results.end());\n        return results;\n  \
+  \  }\n\n    [[nodiscard]] size_t size() const noexcept {\n        return size_;\n    }\n\nprivate:\n    std::unique_ptr<Node>\
+  \ remove_helper(std::unique_ptr<Node> node, std::string_view rem, bool& deleted) {\n        if (!node) return nullptr;\n\
+  \n        if (rem.empty()) {\n            if (node->value.has_value()) {\n                node->value.reset();\n       \
+  \         deleted = true;\n            }\n        } else {\n            char first = rem[0];\n            auto it = node->children.find(first);\n\
+  \            if (it != node->children.end()) {\n                std::string_view edge = it->second->edge_label;\n      \
+  \          if (rem.starts_with(edge)) {\n                    it->second = remove_helper(std::move(it->second), rem.substr(edge.size()),\
+  \ deleted);\n                    if (!it->second) {\n                        node->children.erase(it);\n               \
+  \     }\n                }\n            }\n        }\n\n        // If not root, check if edge can be merged with child\n\
+  \        if (node.get() != root_.get() && !node->value.has_value() && node->children.size() == 1) {\n            auto only_child\
+  \ = std::move(node->children.begin()->second);\n            node->edge_label += only_child->edge_label;\n            node->value\
+  \ = only_child->value;\n            node->children = std::move(only_child->children);\n        }\n\n        return node;\n\
+  \    }\n\n    void collect_all(const Node* node, const std::string& prefix, std::vector<std::string>& out) const {\n   \
+  \     if (node->value.has_value()) {\n            out.push_back(prefix);\n        }\n        for (const auto& [c, child]\
+  \ : node->children) {\n            collect_all(child.get(), prefix + child->edge_label, out);\n        }\n    }\n\n    std::unique_ptr<Node>\
+  \ root_;\n    size_t size_;\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(RadixTreeTest, BasicInsertAndFind) {\n    RadixTree tree;\n \
+  \   tree.insert(\"apple\", 1);\n    tree.insert(\"app\", 2);\n    tree.insert(\"application\", 3);\n\n    EXPECT_EQ(tree.find(\"\
+  apple\"), 1);\n    EXPECT_EQ(tree.find(\"app\"), 2);\n    EXPECT_EQ(tree.find(\"application\"), 3);\n    EXPECT_EQ(tree.find(\"\
+  appl\"), std::nullopt);\n    EXPECT_EQ(tree.size(), 3);\n}\n\nTEST(RadixTreeTest, PrefixSearch) {\n    RadixTree tree;\n\
+  \    tree.insert(\"romane\", 1);\n    tree.insert(\"romanus\", 2);\n    tree.insert(\"romulus\", 3);\n    tree.insert(\"\
+  rubens\", 4);\n\n    auto matches = tree.keys_with_prefix(\"rom\");\n    EXPECT_EQ(matches, (std::vector<std::string>{\"\
+  romane\", \"romanus\", \"romulus\"}));\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(RadixTreeTest, DeleteAndMergeEdge) {\n    RadixTree tree;\n \
+  \   tree.insert(\"slow\", 1);\n    tree.insert(\"slower\", 2);\n    EXPECT_TRUE(tree.remove(\"slower\"));\n    EXPECT_EQ(tree.find(\"\
+  slower\"), std::nullopt);\n    EXPECT_EQ(tree.find(\"slow\"), 1);\n    EXPECT_FALSE(tree.remove(\"slower\")); // Already\
+  \ deleted\n}\n\nTEST(RadixTreeTest, UpdateExistingKey) {\n    RadixTree tree;\n    tree.insert(\"item\", 10);\n    EXPECT_EQ(tree.find(\"\
+  item\"), 10);\n    tree.insert(\"item\", 20);\n    EXPECT_EQ(tree.find(\"item\"), 20);\n    EXPECT_EQ(tree.size(), 1);\n\
+  }\n\nTEST(RadixTreeTest, EmptyPrefixReturnsAll) {\n    RadixTree tree;\n    tree.insert(\"b\", 2);\n    tree.insert(\"a\"\
+  , 1);\n    tree.insert(\"c\", 3);\n    auto all = tree.keys_with_prefix(\"\");\n    EXPECT_EQ(all, (std::vector<std::string>{\"\
+  a\", \"b\", \"c\"}));\n}\n\nTEST(RadixTreeTest, NonExistentPrefix) {\n    RadixTree tree;\n    tree.insert(\"dog\", 1);\n\
+  \    EXPECT_TRUE(tree.keys_with_prefix(\"cat\").empty());\n}\n\nTEST(RadixTreeTest, EmptyStringKey) {\n    RadixTree tree;\n\
+  \    tree.insert(\"\", 42);\n    EXPECT_EQ(tree.find(\"\"), 42);\n    EXPECT_EQ(tree.size(), 1);\n}\n\nTEST(RadixTreeTest,\
+  \ ScaleDictionary) {\n    RadixTree tree;\n    for (int i = 0; i < 500; ++i) {\n        tree.insert(\"test_key_\" + std::to_string(i),\
+  \ i);\n    }\n    EXPECT_EQ(tree.size(), 500);\n    EXPECT_EQ(tree.find(\"test_key_250\"), 250);\n}\n"

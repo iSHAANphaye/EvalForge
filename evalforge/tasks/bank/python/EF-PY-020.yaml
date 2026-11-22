@@ -1,0 +1,77 @@
+task_id: EF-PY-020
+title: Graph Cut Vertex and Bridge Detection via Tarjan's DFS
+language: python
+difficulty: medium
+category: algorithmic
+tags:
+- graph
+- tarjan
+- articulation-points
+- bridges
+- dfs
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Graph Cut Vertex and Bridge Detection via Tarjan's DFS\n\nImplement Tarjan's Depth-First Search algorithm to find\
+  \ all articulation points (cut vertices) and bridges (cut edges) in an undirected graph.\n\n## Definitions\n\n- **Articulation\
+  \ Point (Cut Vertex)**: A vertex whose removal strictly increases the number of connected components in the graph.\n- **Bridge\
+  \ (Cut Edge)**: An edge whose removal strictly increases the number of connected components.\n- **Biconnected Graph**: A\
+  \ connected graph with $\\ge 3$ vertices that has no articulation points.\n\n## Requirements\n\nImplement the class `TarjanBiconnected`:\n\
+  \n- `__init__(self, num_vertices: int)`:\n  Initializes graph with vertices `0` through `num_vertices - 1`.\n- `add_edge(self,\
+  \ u: int, v: int) -> None`:\n  Adds an undirected edge between `u` and `v` (`u != v`).\n- `find_articulation_points(self)\
+  \ -> set[int]`:\n  Returns the set of vertex indices that are articulation points.\n- `find_bridges(self) -> list[tuple[int,\
+  \ int]]`:\n  Returns the list of bridges formatted as canonical sorted tuples `(min(u, v), max(u, v))`, ordered lexicographically.\n\
+  - `is_biconnected(self) -> bool`:\n  Returns `True` if the graph has $\\ge 3$ vertices, is fully connected, and contains\
+  \ zero articulation points.\n"
+starter_code: "class TarjanBiconnected:\n    def __init__(self, num_vertices: int) -> None:\n        \"\"\"Initialize graph\
+  \ with num_vertices vertices (0..num_vertices-1).\"\"\"\n        pass\n\n    def add_edge(self, u: int, v: int) -> None:\n\
+  \        \"\"\"Add undirected edge between u and v.\"\"\"\n        pass\n\n    def find_articulation_points(self) -> set[int]:\n\
+  \        \"\"\"Return set of cut vertex indices.\"\"\"\n        pass\n\n    def find_bridges(self) -> list[tuple[int, int]]:\n\
+  \        \"\"\"Return sorted list of bridge edges (u, v) where u < v.\"\"\"\n        pass\n\n    def is_biconnected(self)\
+  \ -> bool:\n        \"\"\"Return True if graph is connected and has no articulation points (N >= 3).\"\"\"\n        pass\n"
+canonical_solution: "class TarjanBiconnected:\n    def __init__(self, num_vertices: int) -> None:\n        if num_vertices\
+  \ < 0:\n            raise ValueError(\"num_vertices cannot be negative\")\n        self.n = num_vertices\n        self.adj:\
+  \ list[list[int]] = [[] for _ in range(num_vertices)]\n\n    def add_edge(self, u: int, v: int) -> None:\n        if u ==\
+  \ v or not (0 <= u < self.n and 0 <= v < self.n):\n            return\n        self.adj[u].append(v)\n        self.adj[v].append(u)\n\
+  \n    def _dfs(self) -> tuple[set[int], list[tuple[int, int]], int]:\n        tin = [-1] * self.n\n        low = [-1] *\
+  \ self.n\n        timer = 0\n        art_points: set[int] = set()\n        bridges: list[tuple[int, int]] = []\n       \
+  \ components = 0\n\n        def dfs_visit(v: int, p: int = -1) -> None:\n            nonlocal timer\n            tin[v]\
+  \ = low[v] = timer\n            timer += 1\n            children = 0\n\n            for to in self.adj[v]:\n           \
+  \     if to == p:\n                    continue\n                if tin[to] != -1:\n                    low[v] = min(low[v],\
+  \ tin[to])\n                else:\n                    dfs_visit(to, v)\n                    low[v] = min(low[v], low[to])\n\
+  \                    if low[to] >= tin[v] and p != -1:\n                        art_points.add(v)\n                    if\
+  \ low[to] > tin[v]:\n                        bridges.append((min(v, to), max(v, to)))\n                    children += 1\n\
+  \n            if p == -1 and children > 1:\n                art_points.add(v)\n\n        for i in range(self.n):\n     \
+  \       if tin[i] == -1:\n                components += 1\n                dfs_visit(i)\n\n        bridges.sort()\n    \
+  \    return art_points, bridges, components\n\n    def find_articulation_points(self) -> set[int]:\n        art_points,\
+  \ _, _ = self._dfs()\n        return art_points\n\n    def find_bridges(self) -> list[tuple[int, int]]:\n        _, bridges,\
+  \ _ = self._dfs()\n        return bridges\n\n    def is_biconnected(self) -> bool:\n        if self.n < 3:\n           \
+  \ return False\n        art_points, _, components = self._dfs()\n        # Must be connected (single component) and have\
+  \ zero articulation points\n        return components == 1 and len(art_points) == 0\n"
+visible_tests: "def test_articulation_points_bowtie():\n    # Bowtie graph: 0-1-2 and 2-3-4 connected at vertex 2\n    g =\
+  \ TarjanBiconnected(5)\n    g.add_edge(0, 1)\n    g.add_edge(1, 2)\n    g.add_edge(2, 0)\n    g.add_edge(2, 3)\n    g.add_edge(3,\
+  \ 4)\n    g.add_edge(4, 2)\n\n    assert g.find_articulation_points() == {2}\n    assert g.find_bridges() == []\n    assert\
+  \ g.is_biconnected() is False\n\n\ndef test_bridges_simple():\n    # 0 - 1 - 2\n    g = TarjanBiconnected(3)\n    g.add_edge(0,\
+  \ 1)\n    g.add_edge(1, 2)\n\n    assert g.find_articulation_points() == {1}\n    assert g.find_bridges() == [(0, 1), (1,\
+  \ 2)]\n"
+hidden_tests: "def test_cycle_graph_is_biconnected():\n    # Triangle cycle 0-1-2-0\n    g = TarjanBiconnected(3)\n    g.add_edge(0,\
+  \ 1)\n    g.add_edge(1, 2)\n    g.add_edge(2, 0)\n\n    assert g.find_articulation_points() == set()\n    assert g.find_bridges()\
+  \ == []\n    assert g.is_biconnected() is True\n\n\ndef test_disconnected_components():\n    g = TarjanBiconnected(4)\n\
+  \    g.add_edge(0, 1)\n    g.add_edge(2, 3)\n    assert g.is_biconnected() is False\n    assert g.find_bridges() == [(0,\
+  \ 1), (2, 3)]\n\n\ndef test_star_graph():\n    # Center vertex 0 connected to 1, 2, 3, 4\n    g = TarjanBiconnected(5)\n\
+  \    for leaf in range(1, 5):\n        g.add_edge(0, leaf)\n\n    assert g.find_articulation_points() == {0}\n    assert\
+  \ len(g.find_bridges()) == 4\n\n\ndef test_self_loop_and_duplicate_edges():\n    g = TarjanBiconnected(3)\n    g.add_edge(0,\
+  \ 0)  # self loop ignored\n    g.add_edge(0, 1)\n    g.add_edge(1, 2)\n    assert g.find_bridges() == [(0, 1), (1, 2)]\n\
+  \n\ndef test_scale_ring_lattice():\n    n = 100\n    g = TarjanBiconnected(n)\n    for i in range(n):\n        g.add_edge(i,\
+  \ (i + 1) % n)\n        g.add_edge(i, (i + 2) % n)\n\n    assert g.find_articulation_points() == set()\n    assert g.find_bridges()\
+  \ == []\n    assert g.is_biconnected() is True\n\n\ndef test_parameter_validation():\n    import pytest\n    with pytest.raises(ValueError):\n\
+  \        TarjanBiconnected(-1)\n"

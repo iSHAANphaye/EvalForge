@@ -1,0 +1,90 @@
+task_id: EF-PY-001
+title: Thread-Safe LRU Cache with TTL Expiration
+language: python
+difficulty: medium
+category: concurrency
+tags:
+- caching
+- concurrency
+- lru
+- ttl
+- thread-safety
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Thread-Safe LRU Cache with TTL Expiration\n\nImplement a high-performance, thread-safe Least Recently Used (LRU)\
+  \ cache that supports per-item Time-To-Live (TTL) expiration.\n\n## Requirements\n\nImplement the class `ThreadSafeTTLCache`\
+  \ with the following interface:\n\n- `__init__(self, capacity: int, default_ttl: float | None = None)`:\n  Initializes cache\
+  \ with a maximum capacity (`capacity >= 1`) and an optional default TTL in seconds.\n- `get(self, key: Any, default: Any\
+  \ = None) -> Any`:\n  Retrieves the value for `key`. If the key exists and has not expired, returns the value and updates\
+  \ its LRU recency.\n  If the key does not exist or has expired, it must be removed and `default` returned.\n- `put(self,\
+  \ key: Any, value: Any, ttl: float | None = None) -> None`:\n  Inserts or updates the `key` with `value` and an optional\
+  \ item-specific `ttl` in seconds (overriding `default_ttl`).\n  If the key already exists, update its value and TTL and\
+  \ refresh recency.\n  If capacity is reached, evict the least recently used, non-expired item.\n- `delete(self, key: Any)\
+  \ -> bool`:\n  Removes the key from the cache. Returns `True` if key was present and removed, `False` otherwise.\n- `size(self)\
+  \ -> int`:\n  Returns the count of non-expired keys currently in the cache.\n- `cleanup(self) -> int`:\n  Scans and purges\
+  \ all expired keys from the cache. Returns the number of keys purged.\n- `clear(self) -> None`:\n  Removes all keys from\
+  \ the cache.\n\n## Concurrency\nAll operations must be thread-safe using a reentrant lock (`threading.RLock`) or standard\
+  \ lock (`threading.Lock`).\n"
+starter_code: "import threading\nimport time\nfrom typing import Any\n\n\nclass ThreadSafeTTLCache:\n    def __init__(self,\
+  \ capacity: int, default_ttl: float | None = None) -> None:\n        \"\"\"Initialize thread-safe LRU cache with capacity\
+  \ and optional default TTL.\"\"\"\n        pass\n\n    def get(self, key: Any, default: Any = None) -> Any:\n        \"\"\
+  \"Retrieve value for key, updating recency if not expired.\"\"\"\n        pass\n\n    def put(self, key: Any, value: Any,\
+  \ ttl: float | None = None) -> None:\n        \"\"\"Insert or update key with value and optional TTL.\"\"\"\n        pass\n\
+  \n    def delete(self, key: Any) -> bool:\n        \"\"\"Delete key from cache. Return True if existed and deleted, else\
+  \ False.\"\"\"\n        pass\n\n    def size(self) -> int:\n        \"\"\"Return number of active non-expired keys.\"\"\"\
+  \n        pass\n\n    def cleanup(self) -> int:\n        \"\"\"Purge expired keys and return count of purged items.\"\"\"\
+  \n        pass\n\n    def clear(self) -> None:\n        \"\"\"Purge all keys.\"\"\"\n        pass\n"
+canonical_solution: "from collections import OrderedDict\nimport threading\nimport time\nfrom typing import Any\n\n\nclass\
+  \ ThreadSafeTTLCache:\n    def __init__(self, capacity: int, default_ttl: float | None = None) -> None:\n        if capacity\
+  \ < 1:\n            raise ValueError(\"Capacity must be at least 1\")\n        self._capacity = capacity\n        self._default_ttl\
+  \ = default_ttl\n        self._cache: OrderedDict[Any, tuple[Any, float | None]] = OrderedDict()\n        self._lock = threading.RLock()\n\
+  \n    def _is_expired(self, expiry: float | None, now: float) -> bool:\n        return expiry is not None and now >= expiry\n\
+  \n    def get(self, key: Any, default: Any = None) -> Any:\n        with self._lock:\n            now = time.monotonic()\n\
+  \            if key not in self._cache:\n                return default\n            val, expiry = self._cache[key]\n  \
+  \          if self._is_expired(expiry, now):\n                del self._cache[key]\n                return default\n   \
+  \         self._cache.move_to_end(key)\n            return val\n\n    def put(self, key: Any, value: Any, ttl: float | None\
+  \ = None) -> None:\n        with self._lock:\n            now = time.monotonic()\n            effective_ttl = ttl if ttl\
+  \ is not None else self._default_ttl\n            expiry = (now + effective_ttl) if effective_ttl is not None else None\n\
+  \n            if key in self._cache:\n                self._cache[key] = (value, expiry)\n                self._cache.move_to_end(key)\n\
+  \                return\n\n            # Check if any expired items can be evicted before enforcing LRU\n            if\
+  \ len(self._cache) >= self._capacity:\n                expired_keys = [k for k, (_, exp) in self._cache.items() if self._is_expired(exp,\
+  \ now)]\n                if expired_keys:\n                    for k in expired_keys:\n                        del self._cache[k]\n\
+  \n            if len(self._cache) >= self._capacity:\n                self._cache.popitem(last=False)\n\n            self._cache[key]\
+  \ = (value, expiry)\n\n    def delete(self, key: Any) -> bool:\n        with self._lock:\n            if key in self._cache:\n\
+  \                del self._cache[key]\n                return True\n            return False\n\n    def size(self) -> int:\n\
+  \        with self._lock:\n            now = time.monotonic()\n            return sum(1 for _, exp in self._cache.values()\
+  \ if not self._is_expired(exp, now))\n\n    def cleanup(self) -> int:\n        with self._lock:\n            now = time.monotonic()\n\
+  \            expired = [k for k, (_, exp) in self._cache.items() if self._is_expired(exp, now)]\n            for k in expired:\n\
+  \                del self._cache[k]\n            return len(expired)\n\n    def clear(self) -> None:\n        with self._lock:\n\
+  \            self._cache.clear()\n"
+visible_tests: "def test_lru_basic_put_get():\n    cache = ThreadSafeTTLCache(capacity=2)\n    cache.put(\"a\", 1)\n    cache.put(\"\
+  b\", 2)\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") is None\n\n\ndef\
+  \ test_lru_eviction_order():\n    cache = ThreadSafeTTLCache(capacity=2)\n    cache.put(\"x\", 10)\n    cache.put(\"y\"\
+  , 20)\n    cache.get(\"x\")  # Mark x as recently used\n    cache.put(\"z\", 30)  # Should evict y\n    assert cache.get(\"\
+  x\") == 10\n    assert cache.get(\"y\") is None\n    assert cache.get(\"z\") == 30\n"
+hidden_tests: "import concurrent.futures\nimport time\n\n\ndef test_ttl_expiration():\n    cache = ThreadSafeTTLCache(capacity=5,\
+  \ default_ttl=0.05)\n    cache.put(\"k1\", \"v1\")\n    assert cache.get(\"k1\") == \"v1\"\n    time.sleep(0.07)\n    assert\
+  \ cache.get(\"k1\") is None\n    assert cache.size() == 0\n\n\ndef test_custom_item_ttl():\n    cache = ThreadSafeTTLCache(capacity=5,\
+  \ default_ttl=10.0)\n    cache.put(\"short\", \"fast\", ttl=0.05)\n    cache.put(\"long\", \"slow\")\n    time.sleep(0.07)\n\
+  \    assert cache.get(\"short\") is None\n    assert cache.get(\"long\") == \"slow\"\n\n\ndef test_delete_and_clear():\n\
+  \    cache = ThreadSafeTTLCache(capacity=3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert cache.delete(\"\
+  a\") is True\n    assert cache.delete(\"a\") is False\n    assert cache.size() == 1\n    cache.clear()\n    assert cache.size()\
+  \ == 0\n\n\ndef test_cleanup_purges_expired():\n    cache = ThreadSafeTTLCache(capacity=10)\n    cache.put(\"exp1\", 1,\
+  \ ttl=0.02)\n    cache.put(\"exp2\", 2, ttl=0.02)\n    cache.put(\"keep\", 3, ttl=5.0)\n    time.sleep(0.04)\n    purged\
+  \ = cache.cleanup()\n    assert purged == 2\n    assert cache.size() == 1\n    assert cache.get(\"keep\") == 3\n\n\ndef\
+  \ test_concurrent_access():\n    cache = ThreadSafeTTLCache(capacity=50)\n\n    def worker(worker_id: int):\n        for\
+  \ i in range(100):\n            cache.put(f\"key_{worker_id}_{i}\", i)\n            val = cache.get(f\"key_{worker_id}_{i}\"\
+  )\n            assert val == i or val is None\n\n    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:\n\
+  \        futures = [executor.submit(worker, w) for w in range(8)]\n        for f in concurrent.futures.as_completed(futures):\n\
+  \            f.result()\n\n    assert cache.size() <= 50\n\n\ndef test_capacity_one():\n    cache = ThreadSafeTTLCache(capacity=1)\n\
+  \    cache.put(\"first\", 100)\n    assert cache.get(\"first\") == 100\n    cache.put(\"second\", 200)\n    assert cache.get(\"\
+  first\") is None\n    assert cache.get(\"second\") == 200\n"

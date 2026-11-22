@@ -1,0 +1,77 @@
+task_id: EF-PY-003
+title: Consistent Hashing Ring with Virtual Nodes
+language: python
+difficulty: medium
+category: systems
+tags:
+- distributed-systems
+- hashing
+- consistent-hashing
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Consistent Hashing Ring with Virtual Nodes\n\nImplement a consistent hashing ring with virtual nodes (vnodes) to\
+  \ achieve uniform distribution and minimal key remapping during cluster topology changes.\n\n## Requirements\n\nImplement\
+  \ the class `ConsistentHashRing`:\n\n- `__init__(self, replicas: int = 100)`:\n  Initializes the ring with `replicas` virtual\
+  \ nodes per physical node (`replicas >= 1`).\n- `add_node(self, node: str) -> None`:\n  Adds a physical node to the ring.\
+  \ Generates `replicas` virtual keys formatted as `f\"{node}#{i}\"` for `i` in `range(replicas)`.\n  Computes the 32-bit\
+  \ integer MD5 hash of each virtual key and inserts it into the sorted ring.\n  If the node is already present, does nothing.\n\
+  - `remove_node(self, node: str) -> None`:\n  Removes a physical node and all its virtual nodes from the ring.\n  If the\
+  \ node does not exist, does nothing.\n- `get_node(self, key: str) -> str | None`:\n  Hashes `key` using the same MD5 hash\
+  \ function, and finds the first virtual node situated clockwise (equal or greater hash) on the ring.\n  If the key's hash\
+  \ exceeds all virtual node hashes, wraps around to the first virtual node.\n  Returns the physical node identifier associated\
+  \ with the matched virtual node.\n  Returns `None` if the ring is empty.\n- `get_nodes(self) -> list[str]`:\n  Returns a\
+  \ sorted list of unique physical nodes currently registered on the ring.\n"
+starter_code: "class ConsistentHashRing:\n    def __init__(self, replicas: int = 100) -> None:\n        \"\"\"Initialize ring\
+  \ with number of virtual node replicas.\"\"\"\n        pass\n\n    def add_node(self, node: str) -> None:\n        \"\"\"\
+  Add physical node and its virtual nodes to the ring.\"\"\"\n        pass\n\n    def remove_node(self, node: str) -> None:\n\
+  \        \"\"\"Remove physical node and its virtual nodes.\"\"\"\n        pass\n\n    def get_node(self, key: str) -> str\
+  \ | None:\n        \"\"\"Lookup physical node for given key clockwise.\"\"\"\n        pass\n\n    def get_nodes(self) ->\
+  \ list[str]:\n        \"\"\"Return sorted list of all active physical nodes.\"\"\"\n        pass\n"
+canonical_solution: "import bisect\nimport hashlib\n\n\nclass ConsistentHashRing:\n    def __init__(self, replicas: int =\
+  \ 100) -> None:\n        if replicas < 1:\n            raise ValueError(\"Replicas must be at least 1\")\n        self._replicas\
+  \ = replicas\n        self._ring: dict[int, str] = {}\n        self._sorted_keys: list[int] = []\n        self._nodes: set[str]\
+  \ = set()\n\n    def _hash(self, key: str) -> int:\n        digest = hashlib.md5(key.encode(\"utf-8\")).digest()\n     \
+  \   # Use first 4 bytes as 32-bit big-endian unsigned integer\n        return int.from_bytes(digest[:4], byteorder=\"big\"\
+  )\n\n    def add_node(self, node: str) -> None:\n        if node in self._nodes:\n            return\n        self._nodes.add(node)\n\
+  \        for i in range(self._replicas):\n            vkey = f\"{node}#{i}\"\n            h = self._hash(vkey)\n       \
+  \     self._ring[h] = node\n            bisect.insort(self._sorted_keys, h)\n\n    def remove_node(self, node: str) -> None:\n\
+  \        if node not in self._nodes:\n            return\n        self._nodes.remove(node)\n        for i in range(self._replicas):\n\
+  \            vkey = f\"{node}#{i}\"\n            h = self._hash(vkey)\n            if h in self._ring:\n               \
+  \ del self._ring[h]\n                idx = bisect.bisect_left(self._sorted_keys, h)\n                if idx < len(self._sorted_keys)\
+  \ and self._sorted_keys[idx] == h:\n                    del self._sorted_keys[idx]\n\n    def get_node(self, key: str) ->\
+  \ str | None:\n        if not self._sorted_keys:\n            return None\n        h = self._hash(key)\n        idx = bisect.bisect_right(self._sorted_keys,\
+  \ h)\n        if idx == len(self._sorted_keys):\n            idx = 0\n        return self._ring[self._sorted_keys[idx]]\n\
+  \n    def get_nodes(self) -> list[str]:\n        return sorted(self._nodes)\n"
+visible_tests: "def test_consistent_hash_ring_basic():\n    ring = ConsistentHashRing(replicas=50)\n    ring.add_node(\"nodeA\"\
+  )\n    ring.add_node(\"nodeB\")\n    ring.add_node(\"nodeC\")\n\n    node = ring.get_node(\"user_session_1234\")\n    assert\
+  \ node in {\"nodeA\", \"nodeB\", \"nodeC\"}\n    assert ring.get_nodes() == [\"nodeA\", \"nodeB\", \"nodeC\"]\n\n\ndef test_consistent_hash_ring_empty():\n\
+  \    ring = ConsistentHashRing(replicas=10)\n    assert ring.get_node(\"any_key\") is None\n    assert ring.get_nodes()\
+  \ == []\n"
+hidden_tests: "def test_deterministic_mapping():\n    ring = ConsistentHashRing(replicas=100)\n    ring.add_node(\"alpha\"\
+  )\n    ring.add_node(\"beta\")\n    ring.add_node(\"gamma\")\n\n    assignments = [ring.get_node(f\"key_{i}\") for i in\
+  \ range(100)]\n    # Ensure repeated lookups produce identical node assignments\n    assert assignments == [ring.get_node(f\"\
+  key_{i}\") for i in range(100)]\n\n\ndef test_remove_node_reassignment():\n    ring = ConsistentHashRing(replicas=100)\n\
+  \    ring.add_node(\"node1\")\n    ring.add_node(\"node2\")\n    ring.add_node(\"node3\")\n\n    ring.remove_node(\"node2\"\
+  )\n    assert \"node2\" not in ring.get_nodes()\n\n    # No key should ever map to node2\n    for i in range(200):\n   \
+  \     assert ring.get_node(f\"test_item_{i}\") != \"node2\"\n\n\ndef test_single_node_ring():\n    ring = ConsistentHashRing(replicas=25)\n\
+  \    ring.add_node(\"only_server\")\n    for i in range(50):\n        assert ring.get_node(f\"item_{i}\") == \"only_server\"\
+  \n\n\ndef test_duplicate_add_remove_idempotent():\n    ring = ConsistentHashRing(replicas=20)\n    ring.add_node(\"nodeX\"\
+  )\n    ring.add_node(\"nodeX\")  # duplicate add\n    assert ring.get_nodes() == [\"nodeX\"]\n    ring.remove_node(\"nodeX\"\
+  )\n    ring.remove_node(\"nodeX\")  # duplicate remove\n    assert ring.get_nodes() == []\n    assert ring.get_node(\"item\"\
+  ) is None\n\n\ndef test_fair_distribution():\n    ring = ConsistentHashRing(replicas=150)\n    for n in [\"srv1\", \"srv2\"\
+  , \"srv3\"]:\n        ring.add_node(n)\n\n    counts = {\"srv1\": 0, \"srv2\": 0, \"srv3\": 0}\n    for i in range(3000):\n\
+  \        srv = ring.get_node(f\"sample_key_{i}\")\n        counts[srv] += 1\n\n    # With 150 replicas, each server should\
+  \ receive roughly 33% (>= 15% and <= 50%)\n    for srv, cnt in counts.items():\n        assert cnt >= 450, f\"{srv} received\
+  \ too few keys: {cnt}\"\n        assert cnt <= 1500, f\"{srv} received too many keys: {cnt}\"\n\n\ndef test_scale_ring():\n\
+  \    ring = ConsistentHashRing(replicas=50)\n    for i in range(20):\n        ring.add_node(f\"node_{i:02d}\")\n    assert\
+  \ len(ring.get_nodes()) == 20\n    for i in range(1000):\n        assert ring.get_node(f\"metric_{i}\") is not None\n"

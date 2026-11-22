@@ -1,0 +1,74 @@
+task_id: EF-CPP-005
+title: Counting Bloom Filter with Multiple Hashes and Deletion
+language: cpp
+difficulty: medium
+category: data_structures
+tags:
+- bloom-filter
+- counting-bloom-filter
+- data_structures
+- hashing
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Counting Bloom Filter with Multiple Hashes and Deletion\n\nImplement an 8-bit Counting Bloom Filter in C++20 supporting\
+  \ element insertion, membership testing, and element deletion using Kirsch-Mitzenmacher double hashing.\n\n## Requirements\n\
+  \nImplement the class `CountingBloomFilter`:\n\n- `CountingBloomFilter(size_t num_buckets, size_t num_hashes)`:\n  Initializes\
+  \ filter with `num_buckets` 8-bit saturating counter buckets and `num_hashes` independent hash projections.\n- `void insert(std::string_view\
+  \ key)`:\n  Hashes `key` across all $k$ hash locations and increments their 8-bit counters (saturating at 255 without overflowing).\n\
+  - `bool remove(std::string_view key)`:\n  If `contains(key)` is `true`, decrements all $k$ counters (without underflowing\
+  \ below 0) and returns `true`.\n  If `contains(key)` is `false`, leaves counters unchanged and returns `false`.\n- `[[nodiscard]]\
+  \ bool contains(std::string_view key) const noexcept`:\n  Returns `true` if all $k$ counter buckets for `key` are strictly\
+  \ greater than 0.\n- `void clear() noexcept`:\n  Resets all bucket counters to 0.\n- Double Hashing:\n  Use Kirsch-Mitzenmacher\
+  \ technique: $h_i(x) = (h_1(x) + i \\times h_2(x)) \\pmod{\\text{num\\_buckets}}$ where $h_1$ is FNV-1a and $h_2$ is Murmur-style\
+  \ / std::hash.\n"
+starter_code: "#pragma once\n#include <cstddef>\n#include <string_view>\n\nclass CountingBloomFilter {\npublic:\n    CountingBloomFilter(size_t\
+  \ num_buckets, size_t num_hashes);\n\n    void insert(std::string_view key);\n    bool remove(std::string_view key);\n \
+  \   [[nodiscard]] bool contains(std::string_view key) const noexcept;\n    void clear() noexcept;\n};\n"
+canonical_solution: "#pragma once\n#include <cstddef>\n#include <cstdint>\n#include <functional>\n#include <string_view>\n\
+  #include <vector>\n\nclass CountingBloomFilter {\npublic:\n    CountingBloomFilter(size_t num_buckets, size_t num_hashes)\n\
+  \        : num_buckets_(num_buckets), num_hashes_(num_hashes), buckets_(num_buckets, 0) {\n        if (num_buckets == 0\
+  \ || num_hashes == 0) {\n            num_buckets_ = 1;\n            num_hashes_ = 1;\n            buckets_.assign(1, 0);\n\
+  \        }\n    }\n\n    void insert(std::string_view key) {\n        auto [h1, h2] = compute_hashes(key);\n        for\
+  \ (size_t i = 0; i < num_hashes_; ++i) {\n            size_t idx = (h1 + i * h2) % num_buckets_;\n            if (buckets_[idx]\
+  \ < 255) {\n                buckets_[idx]++;\n            }\n        }\n    }\n\n    bool remove(std::string_view key) {\n\
+  \        if (!contains(key)) {\n            return false;\n        }\n        auto [h1, h2] = compute_hashes(key);\n   \
+  \     for (size_t i = 0; i < num_hashes_; ++i) {\n            size_t idx = (h1 + i * h2) % num_buckets_;\n            if\
+  \ (buckets_[idx] > 0 && buckets_[idx] < 255) {\n                buckets_[idx]--;\n            }\n        }\n        return\
+  \ true;\n    }\n\n    [[nodiscard]] bool contains(std::string_view key) const noexcept {\n        auto [h1, h2] = compute_hashes(key);\n\
+  \        for (size_t i = 0; i < num_hashes_; ++i) {\n            size_t idx = (h1 + i * h2) % num_buckets_;\n          \
+  \  if (buckets_[idx] == 0) {\n                return false;\n            }\n        }\n        return true;\n    }\n\n \
+  \   void clear() noexcept {\n        std::fill(buckets_.begin(), buckets_.end(), 0);\n    }\n\nprivate:\n    std::pair<size_t,\
+  \ size_t> compute_hashes(std::string_view key) const noexcept {\n        // FNV-1a 64-bit hash\n        uint64_t fnv = 14695981039346656037ULL;\n\
+  \        for (char c : key) {\n            fnv ^= static_cast<uint8_t>(c);\n            fnv *= 1099511628211ULL;\n     \
+  \   }\n\n        // Secondary hash via std::hash\n        size_t h2 = std::hash<std::string_view>{}(key);\n        if (h2\
+  \ == 0) h2 = 1; // ensure non-zero step\n\n        return {static_cast<size_t>(fnv), h2};\n    }\n\n    size_t num_buckets_;\n\
+  \    size_t num_hashes_;\n    std::vector<uint8_t> buckets_;\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(CountingBloomFilterTest, BasicInsertAndContains) {\n    CountingBloomFilter\
+  \ cbf(1000, 4);\n    EXPECT_FALSE(cbf.contains(\"apple\"));\n\n    cbf.insert(\"apple\");\n    EXPECT_TRUE(cbf.contains(\"\
+  apple\"));\n    EXPECT_FALSE(cbf.contains(\"banana\"));\n}\n\nTEST(CountingBloomFilterTest, DeletionSupport) {\n    CountingBloomFilter\
+  \ cbf(1000, 4);\n    cbf.insert(\"cherry\");\n    EXPECT_TRUE(cbf.contains(\"cherry\"));\n\n    EXPECT_TRUE(cbf.remove(\"\
+  cherry\"));\n    EXPECT_FALSE(cbf.contains(\"cherry\"));\n    EXPECT_FALSE(cbf.remove(\"cherry\")); // Already deleted\n\
+  }\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <string>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(CountingBloomFilterTest, MultipleInsertionsAndDeletions)\
+  \ {\n    CountingBloomFilter cbf(500, 3);\n    cbf.insert(\"key\");\n    cbf.insert(\"key\");\n    EXPECT_TRUE(cbf.contains(\"\
+  key\"));\n\n    EXPECT_TRUE(cbf.remove(\"key\"));\n    // Still present because inserted twice\n    EXPECT_TRUE(cbf.contains(\"\
+  key\"));\n\n    EXPECT_TRUE(cbf.remove(\"key\"));\n    EXPECT_FALSE(cbf.contains(\"key\"));\n}\n\nTEST(CountingBloomFilterTest,\
+  \ ClearResetsAll) {\n    CountingBloomFilter cbf(500, 4);\n    cbf.insert(\"alpha\");\n    cbf.insert(\"beta\");\n    cbf.clear();\n\
+  \    EXPECT_FALSE(cbf.contains(\"alpha\"));\n    EXPECT_FALSE(cbf.contains(\"beta\"));\n}\n\nTEST(CountingBloomFilterTest,\
+  \ NonExistentDeleteReturnsFalse) {\n    CountingBloomFilter cbf(500, 3);\n    EXPECT_FALSE(cbf.remove(\"ghost_key\"));\n\
+  }\n\nTEST(CountingBloomFilterTest, ScaleDatasetInsertion) {\n    CountingBloomFilter cbf(20000, 5);\n    for (int i = 0;\
+  \ i < 1000; ++i) {\n        cbf.insert(\"item_\" + std::to_string(i));\n    }\n    for (int i = 0; i < 1000; ++i) {\n  \
+  \      EXPECT_TRUE(cbf.contains(\"item_\" + std::to_string(i)));\n    }\n}\n\nTEST(CountingBloomFilterTest, EmptyStringKey)\
+  \ {\n    CountingBloomFilter cbf(100, 3);\n    cbf.insert(\"\");\n    EXPECT_TRUE(cbf.contains(\"\"));\n    EXPECT_TRUE(cbf.remove(\"\
+  \"));\n    EXPECT_FALSE(cbf.contains(\"\"));\n}\n\nTEST(CountingBloomFilterTest, ZeroBucketsFallback) {\n    CountingBloomFilter\
+  \ cbf(0, 0);\n    cbf.insert(\"test\");\n    EXPECT_TRUE(cbf.contains(\"test\"));\n}\n"

@@ -1,0 +1,83 @@
+task_id: EF-PY-018
+title: Binary Protocol Serializer with Varint and Checksum
+language: python
+difficulty: medium
+category: systems
+tags:
+- binary
+- serialization
+- varint
+- crc32
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Binary Protocol Serializer with Varint and Checksum\n\nImplement a compact binary frame serializer and deserializer\
+  \ with unsigned LEB128 Varint encoding, header flags, and CRC32 checksum verification.\n\n## Frame Specification\n\n`[Magic:\
+  \ 2 bytes] [MessageID: Varint] [Flags: 1 byte] [PayloadLength: Varint] [Payload: N bytes] [CRC32: 4 bytes BE]`\n\n- **Magic\
+  \ bytes**: `0xEF, 0x01`\n- **MessageID**: Unsigned integer encoded via variable-length LEB128.\n- **Flags**: 1 byte (bitfield\
+  \ `0..255`).\n- **PayloadLength**: Unsigned integer encoded via LEB128 representing byte length of payload.\n- **Payload**:\
+  \ Raw byte buffer of length `PayloadLength`.\n- **CRC32**: 4 bytes in big-endian network order computed over `Payload`.\n\
+  \n## Requirements\n\nImplement the class `BinaryProtocolCodec`:\n\n- `encode_varint(value: int) -> bytes`:\n  Encodes non-negative\
+  \ integer using LEB128 (7 data bits per byte, MSB indicates continuation).\n- `decode_varint(data: bytes, offset: int =\
+  \ 0) -> tuple[int, int]`:\n  Decodes integer from `data` starting at `offset`. Returns `(decoded_value, new_offset)`.\n\
+  - `encode_message(msg_id: int, flags: int, payload: bytes) -> bytes`:\n  Packs message fields into compliant binary frame.\n\
+  - `decode_message(frame: bytes) -> tuple[int, int, bytes]`:\n  Validates magic bytes, decodes fields, and verifies CRC32\
+  \ checksum.\n  Returns `(msg_id, flags, payload)`.\n  Raises `ValueError` if magic is invalid, frame is truncated, or CRC32\
+  \ checksum fails.\n"
+starter_code: "class BinaryProtocolCodec:\n    @staticmethod\n    def encode_varint(value: int) -> bytes:\n        \"\"\"\
+  Encode unsigned integer using LEB128 varint.\"\"\"\n        pass\n\n    @staticmethod\n    def decode_varint(data: bytes,\
+  \ offset: int = 0) -> tuple[int, int]:\n        \"\"\"Decode LEB128 varint, returning (value, next_offset).\"\"\"\n    \
+  \    pass\n\n    @staticmethod\n    def encode_message(msg_id: int, flags: int, payload: bytes) -> bytes:\n        \"\"\"\
+  Pack frame with magic, varints, payload, and CRC32.\"\"\"\n        pass\n\n    @staticmethod\n    def decode_message(frame:\
+  \ bytes) -> tuple[int, int, bytes]:\n        \"\"\"Unpack frame and verify CRC32, returning (msg_id, flags, payload).\"\"\
+  \"\n        pass\n"
+canonical_solution: "import struct\nimport zlib\n\n\nclass BinaryProtocolCodec:\n    MAGIC = bytes([0xEF, 0x01])\n\n    @staticmethod\n\
+  \    def encode_varint(value: int) -> bytes:\n        if value < 0:\n            raise ValueError(\"Varint must be non-negative\"\
+  )\n        out = bytearray()\n        while True:\n            byte = value & 0x7F\n            value >>= 7\n          \
+  \  if value > 0:\n                out.append(byte | 0x80)\n            else:\n                out.append(byte)\n       \
+  \         break\n        return bytes(out)\n\n    @staticmethod\n    def decode_varint(data: bytes, offset: int = 0) ->\
+  \ tuple[int, int]:\n        result = 0\n        shift = 0\n        i = offset\n        n = len(data)\n\n        while i\
+  \ < n:\n            byte = data[i]\n            i += 1\n            result |= (byte & 0x7F) << shift\n            if (byte\
+  \ & 0x80) == 0:\n                return result, i\n            shift += 7\n            if shift >= 64:\n               \
+  \ raise ValueError(\"Varint overflow\")\n\n        raise ValueError(\"Unexpected EOF while decoding varint\")\n\n    @classmethod\n\
+  \    def encode_message(cls, msg_id: int, flags: int, payload: bytes) -> bytes:\n        if not (0 <= flags <= 255):\n \
+  \           raise ValueError(\"Flags must fit in 1 byte (0..255)\")\n\n        buf = bytearray(cls.MAGIC)\n        buf.extend(cls.encode_varint(msg_id))\n\
+  \        buf.append(flags)\n        buf.extend(cls.encode_varint(len(payload)))\n        buf.extend(payload)\n\n       \
+  \ crc = zlib.crc32(payload) & 0xFFFFFFFF\n        buf.extend(struct.pack(\">I\", crc))\n        return bytes(buf)\n\n  \
+  \  @classmethod\n    def decode_message(cls, frame: bytes) -> tuple[int, int, bytes]:\n        if len(frame) < 7:  # Min\
+  \ possible frame: 2 magic + 1 id + 1 flag + 1 len + 0 payload + 4 crc\n            raise ValueError(\"Frame too short\"\
+  )\n\n        if frame[:2] != cls.MAGIC:\n            raise ValueError(\"Invalid magic bytes header\")\n\n        offset\
+  \ = 2\n        msg_id, offset = cls.decode_varint(frame, offset)\n\n        if offset >= len(frame):\n            raise\
+  \ ValueError(\"Truncated frame at flags\")\n        flags = frame[offset]\n        offset += 1\n\n        payload_len, offset\
+  \ = cls.decode_varint(frame, offset)\n\n        if offset + payload_len + 4 != len(frame):\n            raise ValueError(\"\
+  Payload length mismatch with frame boundary\")\n\n        payload = frame[offset:offset + payload_len]\n        offset +=\
+  \ payload_len\n\n        expected_crc = struct.unpack(\">I\", frame[offset:offset + 4])[0]\n        actual_crc = zlib.crc32(payload)\
+  \ & 0xFFFFFFFF\n\n        if expected_crc != actual_crc:\n            raise ValueError(f\"CRC32 mismatch: expected {expected_crc:#x},\
+  \ got {actual_crc:#x}\")\n\n        return msg_id, flags, payload\n"
+visible_tests: "def test_varint_roundtrip():\n    codec = BinaryProtocolCodec\n    for val in [0, 1, 127, 128, 300, 16384,\
+  \ 1000000]:\n        encoded = codec.encode_varint(val)\n        decoded, off = codec.decode_varint(encoded)\n        assert\
+  \ decoded == val\n        assert off == len(encoded)\n\n\ndef test_frame_encode_decode():\n    codec = BinaryProtocolCodec\n\
+  \    msg_id = 42\n    flags = 0x05\n    payload = b\"Sample JSON or binary payload\"\n\n    frame = codec.encode_message(msg_id,\
+  \ flags, payload)\n    d_id, d_flags, d_payload = codec.decode_message(frame)\n    assert d_id == msg_id\n    assert d_flags\
+  \ == flags\n    assert d_payload == payload\n"
+hidden_tests: "import pytest\n\n\ndef test_corrupted_crc32_raises():\n    codec = BinaryProtocolCodec\n    frame = bytearray(codec.encode_message(10,\
+  \ 0, b\"Secret Payload\"))\n    # Corrupt last byte of CRC\n    frame[-1] ^= 0xFF\n    with pytest.raises(ValueError, match=\"\
+  CRC32 mismatch\"):\n        codec.decode_message(bytes(frame))\n\n\ndef test_invalid_magic_raises():\n    codec = BinaryProtocolCodec\n\
+  \    frame = bytearray(codec.encode_message(1, 0, b\"data\"))\n    frame[0] = 0x00\n    with pytest.raises(ValueError, match=\"\
+  Invalid magic\"):\n        codec.decode_message(bytes(frame))\n\n\ndef test_empty_payload():\n    codec = BinaryProtocolCodec\n\
+  \    frame = codec.encode_message(100, 0xFF, b\"\")\n    msg_id, flags, payload = codec.decode_message(frame)\n    assert\
+  \ msg_id == 100\n    assert flags == 0xFF\n    assert payload == b\"\"\n\n\ndef test_truncated_frame():\n    codec = BinaryProtocolCodec\n\
+  \    frame = codec.encode_message(1, 0, b\"some content\")\n    with pytest.raises(ValueError):\n        codec.decode_message(frame[:5])\n\
+  \n\ndef test_large_payload_scale():\n    codec = BinaryProtocolCodec\n    large_payload = b\"X\" * 100000\n    frame = codec.encode_message(99999,\
+  \ 12, large_payload)\n    msg_id, flags, payload = codec.decode_message(frame)\n    assert msg_id == 99999\n    assert flags\
+  \ == 12\n    assert payload == large_payload\n\n\ndef test_negative_varint_raises():\n    codec = BinaryProtocolCodec\n\
+  \    with pytest.raises(ValueError):\n        codec.encode_varint(-1)\n"

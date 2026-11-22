@@ -1,0 +1,77 @@
+task_id: EF-CPP-002
+title: Fixed-Size Arena Bump Memory Allocator with 64-Bit Alignment
+language: cpp
+difficulty: medium
+category: systems
+tags:
+- memory-allocator
+- arena
+- systems
+- performance
+- cpp20
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Fixed-Size Arena Bump Memory Allocator with 64-Bit Alignment\n\nImplement a fast linear/arena (bump) memory allocator\
+  \ in C++20 with custom alignment support (default 8-byte / 64-bit alignment) and RAII object construction.\n\n## Requirements\n\
+  \nImplement the class `ArenaAllocator`:\n\n- `explicit ArenaAllocator(size_t total_bytes)`:\n  Allocates a contiguous heap\
+  \ buffer of `total_bytes`.\n- `void* allocate(size_t bytes, size_t alignment = alignof(std::max_align_t))`:\n  Bumps internal\
+  \ allocation pointer forward, respecting `alignment` padding (where `alignment` is a power of two).\n  Returns a properly\
+  \ aligned pointer to allocated space, or `nullptr` if insufficient contiguous memory remains.\n- `template <typename T,\
+  \ typename... Args> T* create(Args&&... args)`:\n  Allocates aligned memory for `sizeof(T)` with `alignof(T)` and constructs\
+  \ object using in-place placement-new. Returns `T*` or `nullptr`.\n- `void reset() noexcept`:\n  Resets the allocation offset\
+  \ to 0, recycling all previously allocated memory in $O(1)$ time without calling individual object destructors.\n- `[[nodiscard]]\
+  \ size_t used_bytes() const noexcept`:\n  Returns total bytes used (including alignment padding).\n- `[[nodiscard]] size_t\
+  \ total_capacity() const noexcept`:\n  Returns total size of the arena.\n"
+starter_code: "#pragma once\n#include <cstddef>\n#include <new>\n#include <utility>\n\nclass ArenaAllocator {\npublic:\n \
+  \   explicit ArenaAllocator(size_t total_bytes);\n    ~ArenaAllocator();\n\n    void* allocate(size_t bytes, size_t alignment\
+  \ = alignof(std::max_align_t));\n\n    template <typename T, typename... Args>\n    T* create(Args&&... args);\n\n    void\
+  \ reset() noexcept;\n\n    [[nodiscard]] size_t used_bytes() const noexcept;\n    [[nodiscard]] size_t total_capacity()\
+  \ const noexcept;\n};\n"
+canonical_solution: "#pragma once\n#include <cstddef>\n#include <cstdint>\n#include <new>\n#include <utility>\n\nclass ArenaAllocator\
+  \ {\npublic:\n    explicit ArenaAllocator(size_t total_bytes)\n        : capacity_(total_bytes), offset_(0) {\n        buffer_\
+  \ = new std::byte[total_bytes];\n    }\n\n    ~ArenaAllocator() {\n        delete[] buffer_;\n    }\n\n    ArenaAllocator(const\
+  \ ArenaAllocator&) = delete;\n    ArenaAllocator& operator=(const ArenaAllocator&) = delete;\n\n    ArenaAllocator(ArenaAllocator&&\
+  \ other) noexcept\n        : buffer_(other.buffer_), capacity_(other.capacity_), offset_(other.offset_) {\n        other.buffer_\
+  \ = nullptr;\n        other.capacity_ = 0;\n        other.offset_ = 0;\n    }\n\n    ArenaAllocator& operator=(ArenaAllocator&&\
+  \ other) noexcept {\n        if (this != &other) {\n            delete[] buffer_;\n            buffer_ = other.buffer_;\n\
+  \            capacity_ = other.capacity_;\n            offset_ = other.offset_;\n            other.buffer_ = nullptr;\n\
+  \            other.capacity_ = 0;\n            other.offset_ = 0;\n        }\n        return *this;\n    }\n\n    void*\
+  \ allocate(size_t bytes, size_t alignment = alignof(std::max_align_t)) {\n        if (bytes == 0 || buffer_ == nullptr)\
+  \ {\n            return nullptr;\n        }\n\n        uintptr_t current_addr = reinterpret_cast<uintptr_t>(buffer_ + offset_);\n\
+  \        uintptr_t aligned_addr = (current_addr + (alignment - 1)) & ~(alignment - 1);\n        size_t padding = aligned_addr\
+  \ - current_addr;\n\n        if (offset_ + padding + bytes > capacity_) {\n            return nullptr; // Out of memory\n\
+  \        }\n\n        offset_ += padding + bytes;\n        return reinterpret_cast<void*>(aligned_addr);\n    }\n\n    template\
+  \ <typename T, typename... Args>\n    T* create(Args&&... args) {\n        void* mem = allocate(sizeof(T), alignof(T));\n\
+  \        if (!mem) {\n            return nullptr;\n        }\n        return ::new (mem) T(std::forward<Args>(args)...);\n\
+  \    }\n\n    void reset() noexcept {\n        offset_ = 0;\n    }\n\n    [[nodiscard]] size_t used_bytes() const noexcept\
+  \ {\n        return offset_;\n    }\n\n    [[nodiscard]] size_t total_capacity() const noexcept {\n        return capacity_;\n\
+  \    }\n\nprivate:\n    std::byte* buffer_{nullptr};\n    size_t capacity_{0};\n    size_t offset_{0};\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(ArenaAllocatorTest, BasicAllocation) {\n    ArenaAllocator arena(1024);\n\
+  \    EXPECT_EQ(arena.total_capacity(), 1024);\n    EXPECT_EQ(arena.used_bytes(), 0);\n\n    void* p1 = arena.allocate(64,\
+  \ 8);\n    EXPECT_NE(p1, nullptr);\n    EXPECT_EQ(reinterpret_cast<uintptr_t>(p1) % 8, 0);\n\n    void* p2 = arena.allocate(128,\
+  \ 16);\n    EXPECT_NE(p2, nullptr);\n    EXPECT_EQ(reinterpret_cast<uintptr_t>(p2) % 16, 0);\n}\n\nTEST(ArenaAllocatorTest,\
+  \ ObjectCreation) {\n    struct Point {\n        int x;\n        int y;\n        Point(int x_, int y_) : x(x_), y(y_) {}\n\
+  \    };\n\n    ArenaAllocator arena(256);\n    Point* pt = arena.create<Point>(10, 20);\n    ASSERT_NE(pt, nullptr);\n \
+  \   EXPECT_EQ(pt->x, 10);\n    EXPECT_EQ(pt->y, 20);\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(ArenaAllocatorTest, OutOfMemoryReturnsNull) {\n    ArenaAllocator\
+  \ arena(100);\n    void* p1 = arena.allocate(80);\n    EXPECT_NE(p1, nullptr);\n    void* p2 = arena.allocate(40);\n   \
+  \ EXPECT_EQ(p2, nullptr); // Over capacity\n}\n\nTEST(ArenaAllocatorTest, ResetRecyclesMemory) {\n    ArenaAllocator arena(200);\n\
+  \    void* p1 = arena.allocate(150);\n    EXPECT_NE(p1, nullptr);\n    EXPECT_GT(arena.used_bytes(), 0);\n\n    arena.reset();\n\
+  \    EXPECT_EQ(arena.used_bytes(), 0);\n\n    void* p2 = arena.allocate(150);\n    EXPECT_NE(p2, nullptr);\n}\n\nTEST(ArenaAllocatorTest,\
+  \ CustomHighAlignment64) {\n    ArenaAllocator arena(4096);\n    void* p = arena.allocate(128, 64);\n    ASSERT_NE(p, nullptr);\n\
+  \    EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % 64, 0);\n}\n\nTEST(ArenaAllocatorTest, ZeroBytesAllocation) {\n    ArenaAllocator\
+  \ arena(128);\n    EXPECT_EQ(arena.allocate(0), nullptr);\n}\n\nTEST(ArenaAllocatorTest, ManySmallAllocationsPacking) {\n\
+  \    ArenaAllocator arena(10000);\n    for (int i = 0; i < 500; ++i) {\n        void* ptr = arena.allocate(8, 8);\n    \
+  \    ASSERT_NE(ptr, nullptr);\n    }\n    EXPECT_LE(arena.used_bytes(), 10000);\n}\n\nTEST(ArenaAllocatorTest, MoveConstructor)\
+  \ {\n    ArenaAllocator a1(512);\n    void* p1 = a1.allocate(64);\n    EXPECT_NE(p1, nullptr);\n\n    ArenaAllocator a2(std::move(a1));\n\
+  \    EXPECT_EQ(a2.total_capacity(), 512);\n    EXPECT_GT(a2.used_bytes(), 0);\n}\n"

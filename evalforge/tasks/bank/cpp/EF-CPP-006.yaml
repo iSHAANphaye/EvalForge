@@ -1,0 +1,78 @@
+task_id: EF-CPP-006
+title: C++20 Coroutine Range Generator
+language: cpp
+difficulty: hard
+category: systems
+tags:
+- coroutines
+- generator
+- cpp20
+- lazy-evaluation
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# C++20 Coroutine Range Generator\n\nImplement a generic C++20 coroutine-based `Generator<T>` type supporting `co_yield`\
+  \ for lazy sequence evaluation, standard range/iterator protocol, and clean RAII lifecycle cleanup.\n\n## Requirements\n\
+  \nImplement the template class:\n```cpp\ntemplate <typename T>\nclass Generator;\n```\n\n### Components:\n- `struct promise_type`:\n\
+  \  - `Generator get_return_object() noexcept`\n  - `std::suspend_always initial_suspend() noexcept`\n  - `std::suspend_always\
+  \ final_suspend() noexcept`\n  - `std::suspend_always yield_value(T value) noexcept`\n  - `void return_void() noexcept`\n\
+  \  - `void unhandled_exception()`\n- `struct iterator`:\n  - Input iterator supporting `operator*()`, `operator++()`, and\
+  \ `operator!=(const iterator&)`.\n- Methods:\n  - `iterator begin()`: Resumes coroutine to produce first item.\n  - `iterator\
+  \ end() noexcept`: Sentinel.\n  - Move-constructible and move-assignable; non-copyable.\n  - Destructor destroys underlying\
+  \ `std::coroutine_handle` safely.\n\n### Helper Functions:\n- `inline Generator<int> range(int start, int end, int step\
+  \ = 1)`\n- `inline Generator<uint64_t> fibonacci(size_t count)`\n"
+starter_code: "#pragma once\n#include <coroutine>\n#include <cstddef>\n#include <cstdint>\n\ntemplate <typename T>\nclass\
+  \ Generator {\npublic:\n    struct promise_type;\n    // Define iterator and generator interface\n};\n\ninline Generator<int>\
+  \ range(int start, int end, int step = 1);\ninline Generator<uint64_t> fibonacci(size_t count);\n"
+canonical_solution: "#pragma once\n#include <coroutine>\n#include <cstddef>\n#include <cstdint>\n#include <exception>\n#include\
+  \ <utility>\n\ntemplate <typename T>\nclass Generator {\npublic:\n    struct promise_type {\n        T current_value{};\n\
+  \        std::exception_ptr exception{nullptr};\n\n        Generator get_return_object() noexcept {\n            return\
+  \ Generator{std::coroutine_handle<promise_type>::from_promise(*this)};\n        }\n\n        std::suspend_always initial_suspend()\
+  \ noexcept { return {}; }\n        std::suspend_always final_suspend() noexcept { return {}; }\n\n        std::suspend_always\
+  \ yield_value(T value) noexcept {\n            current_value = std::move(value);\n            return {};\n        }\n\n\
+  \        void return_void() noexcept {}\n\n        void unhandled_exception() {\n            exception = std::current_exception();\n\
+  \        }\n    };\n\n    using handle_type = std::coroutine_handle<promise_type>;\n\n    explicit Generator(handle_type\
+  \ h) noexcept : coro_(h) {}\n\n    ~Generator() {\n        if (coro_) {\n            coro_.destroy();\n        }\n    }\n\
+  \n    Generator(const Generator&) = delete;\n    Generator& operator=(const Generator&) = delete;\n\n    Generator(Generator&&\
+  \ other) noexcept : coro_(other.coro_) {\n        other.coro_ = nullptr;\n    }\n\n    Generator& operator=(Generator&&\
+  \ other) noexcept {\n        if (this != &other) {\n            if (coro_) {\n                coro_.destroy();\n       \
+  \     }\n            coro_ = other.coro_;\n            other.coro_ = nullptr;\n        }\n        return *this;\n    }\n\
+  \n    struct iterator {\n        handle_type coro{nullptr};\n\n        iterator& operator++() {\n            if (coro &&\
+  \ !coro.done()) {\n                coro.resume();\n                if (coro.promise().exception) {\n                   \
+  \ std::rethrow_exception(coro.promise().exception);\n                }\n            }\n            return *this;\n     \
+  \   }\n\n        const T& operator*() const noexcept {\n            return coro.promise().current_value;\n        }\n\n\
+  \        bool operator==(const iterator& other) const noexcept {\n            bool done1 = !coro || coro.done();\n     \
+  \       bool done2 = !other.coro || other.coro.done();\n            return done1 == done2;\n        }\n\n        bool operator!=(const\
+  \ iterator& other) const noexcept {\n            return !(*this == other);\n        }\n    };\n\n    iterator begin() {\n\
+  \        if (coro_) {\n            coro_.resume();\n            if (coro_.promise().exception) {\n                std::rethrow_exception(coro_.promise().exception);\n\
+  \            }\n        }\n        return iterator{coro_};\n    }\n\n    iterator end() noexcept {\n        return iterator{nullptr};\n\
+  \    }\n\nprivate:\n    handle_type coro_{nullptr};\n};\n\ninline Generator<int> range(int start, int end, int step = 1)\
+  \ {\n    if (step > 0) {\n        for (int i = start; i < end; i += step) {\n            co_yield i;\n        }\n    } else\
+  \ if (step < 0) {\n        for (int i = start; i > end; i += step) {\n            co_yield i;\n        }\n    }\n}\n\ninline\
+  \ Generator<uint64_t> fibonacci(size_t count) {\n    uint64_t a = 0;\n    uint64_t b = 1;\n    for (size_t i = 0; i < count;\
+  \ ++i) {\n        co_yield a;\n        uint64_t next = a + b;\n        a = b;\n        b = next;\n    }\n}\n"
+visible_tests: "#include <gtest/gtest.h>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(GeneratorTest, RangeBasic) {\n    std::vector<int>\
+  \ vals;\n    for (int x : range(0, 5)) {\n        vals.push_back(x);\n    }\n    EXPECT_EQ(vals, (std::vector<int>{0, 1,\
+  \ 2, 3, 4}));\n}\n\nTEST(GeneratorTest, FibonacciSequence) {\n    std::vector<uint64_t> fibs;\n    for (uint64_t n : fibonacci(6))\
+  \ {\n        fibs.push_back(n);\n    }\n    EXPECT_EQ(fibs, (std::vector<uint64_t>{0, 1, 1, 2, 3, 5}));\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(GeneratorTest, EmptyRange) {\n    std::vector<int>\
+  \ vals;\n    for (int x : range(5, 5)) {\n        vals.push_back(x);\n    }\n    EXPECT_TRUE(vals.empty());\n}\n\nTEST(GeneratorTest,\
+  \ NegativeStepRange) {\n    std::vector<int> vals;\n    for (int x : range(5, 0, -1)) {\n        vals.push_back(x);\n  \
+  \  }\n    EXPECT_EQ(vals, (std::vector<int>{5, 4, 3, 2, 1}));\n}\n\nTEST(GeneratorTest, EarlyBreakLifecycle) {\n    int\
+  \ count = 0;\n    for (int x : range(0, 1000)) {\n        if (++count == 3) {\n            break;\n        }\n    }\n  \
+  \  EXPECT_EQ(count, 3);\n}\n\nTEST(GeneratorTest, MoveConstructor) {\n    auto gen1 = range(1, 4);\n    auto gen2 = std::move(gen1);\n\
+  \n    std::vector<int> res;\n    for (int v : gen2) {\n        res.push_back(v);\n    }\n    EXPECT_EQ(res, (std::vector<int>{1,\
+  \ 2, 3}));\n}\n\nTEST(GeneratorTest, LargeSequenceIteration) {\n    size_t count = 0;\n    for (int x : range(0, 10000))\
+  \ {\n        (void)x;\n        count++;\n    }\n    EXPECT_EQ(count, 10000);\n}\n\nTEST(GeneratorTest, ZeroFibonacciCount)\
+  \ {\n    std::vector<uint64_t> fibs;\n    for (uint64_t n : fibonacci(0)) {\n        fibs.push_back(n);\n    }\n    EXPECT_TRUE(fibs.empty());\n\
+  }\n"

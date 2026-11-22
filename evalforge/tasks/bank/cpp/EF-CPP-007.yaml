@@ -1,0 +1,85 @@
+task_id: EF-CPP-007
+title: Concurrent Read-Write Spinlock Using Atomic Bit Flags
+language: cpp
+difficulty: hard
+category: concurrency
+tags:
+- spinlock
+- rwlock
+- concurrency
+- atomics
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Concurrent Read-Write Spinlock Using Atomic Bit Flags\n\nImplement a high-performance, low-latency concurrent Read-Write\
+  \ Spinlock in C++20 compacted into a single `std::atomic<uint32_t>`.\n\n## State Representation\n\n- Bit 31 (MSB, `0x80000000`):\
+  \ Exclusive write lock flag (`1` = write locked, `0` = write unlocked).\n- Bits 0..30 (`0x7FFFFFFF`): Shared reader reference\
+  \ counter.\n\n## Requirements\n\nImplement the class `RWSpinLock`:\n\n- `void lock_shared() noexcept`:\n  Spins until no\
+  \ writer holds the lock (bit 31 is 0), then atomically increments reader count.\n- `bool try_lock_shared() noexcept`:\n\
+  \  Non-blocking attempt. Returns `true` if read lock acquired, `false` if writer is active.\n- `void unlock_shared() noexcept`:\n\
+  \  Decrements reader count.\n- `void lock() noexcept`:\n  Spins until no writer and no readers are present (`state == 0`),\
+  \ then atomically sets bit 31.\n- `bool try_lock() noexcept`:\n  Non-blocking attempt. Returns `true` if acquired exclusively,\
+  \ `false` otherwise.\n- `void unlock() noexcept`:\n  Clears the write lock bit.\n\nImplement RAII wrappers:\n- `class ReadGuard`\n\
+  - `class WriteGuard`\n"
+starter_code: "#pragma once\n#include <atomic>\n#include <cstdint>\n\nclass RWSpinLock {\npublic:\n    void lock_shared()\
+  \ noexcept;\n    bool try_lock_shared() noexcept;\n    void unlock_shared() noexcept;\n\n    void lock() noexcept;\n   \
+  \ bool try_lock() noexcept;\n    void unlock() noexcept;\n};\n\nclass ReadGuard {\npublic:\n    explicit ReadGuard(RWSpinLock&\
+  \ lock);\n    ~ReadGuard();\n};\n\nclass WriteGuard {\npublic:\n    explicit WriteGuard(RWSpinLock& lock);\n    ~WriteGuard();\n\
+  };\n"
+canonical_solution: "#pragma once\n#include <atomic>\n#include <cstdint>\n#include <thread>\n\nclass RWSpinLock {\npublic:\n\
+  \    RWSpinLock() : state_(0) {}\n\n    void lock_shared() noexcept {\n        while (true) {\n            uint32_t expected\
+  \ = state_.load(std::memory_order_relaxed);\n            if ((expected & WRITE_FLAG) == 0) {\n                if (state_.compare_exchange_weak(expected,\
+  \ expected + 1,\n                                                std::memory_order_acquire,\n                          \
+  \                      std::memory_order_relaxed)) {\n                    return;\n                }\n            } else\
+  \ {\n                std::this_thread::yield();\n            }\n        }\n    }\n\n    bool try_lock_shared() noexcept\
+  \ {\n        uint32_t expected = state_.load(std::memory_order_relaxed);\n        if ((expected & WRITE_FLAG) != 0) {\n\
+  \            return false;\n        }\n        return state_.compare_exchange_strong(expected, expected + 1,\n         \
+  \                                     std::memory_order_acquire,\n                                              std::memory_order_relaxed);\n\
+  \    }\n\n    void unlock_shared() noexcept {\n        state_.fetch_sub(1, std::memory_order_release);\n    }\n\n    void\
+  \ lock() noexcept {\n        while (true) {\n            uint32_t expected = 0;\n            if (state_.compare_exchange_weak(expected,\
+  \ WRITE_FLAG,\n                                            std::memory_order_acquire,\n                                \
+  \            std::memory_order_relaxed)) {\n                return;\n            }\n            std::this_thread::yield();\n\
+  \        }\n    }\n\n    bool try_lock() noexcept {\n        uint32_t expected = 0;\n        return state_.compare_exchange_strong(expected,\
+  \ WRITE_FLAG,\n                                              std::memory_order_acquire,\n                              \
+  \                std::memory_order_relaxed);\n    }\n\n    void unlock() noexcept {\n        state_.fetch_and(~WRITE_FLAG,\
+  \ std::memory_order_release);\n    }\n\nprivate:\n    static constexpr uint32_t WRITE_FLAG = 0x80000000U;\n    alignas(64)\
+  \ std::atomic<uint32_t> state_{0};\n};\n\nclass ReadGuard {\npublic:\n    explicit ReadGuard(RWSpinLock& lock) : lock_(lock)\
+  \ {\n        lock_.lock_shared();\n    }\n    ~ReadGuard() {\n        lock_.unlock_shared();\n    }\n    ReadGuard(const\
+  \ ReadGuard&) = delete;\n    ReadGuard& operator=(const ReadGuard&) = delete;\n\nprivate:\n    RWSpinLock& lock_;\n};\n\n\
+  class WriteGuard {\npublic:\n    explicit WriteGuard(RWSpinLock& lock) : lock_(lock) {\n        lock_.lock();\n    }\n \
+  \   ~WriteGuard() {\n        lock_.unlock();\n    }\n    WriteGuard(const WriteGuard&) = delete;\n    WriteGuard& operator=(const\
+  \ WriteGuard&) = delete;\n\nprivate:\n    RWSpinLock& lock_;\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(RWSpinLockTest, MultipleReadersShared) {\n    RWSpinLock lock;\n\
+  \    EXPECT_TRUE(lock.try_lock_shared());\n    EXPECT_TRUE(lock.try_lock_shared()); // Multiple readers allowed\n\n    EXPECT_FALSE(lock.try_lock());\
+  \ // Writer rejected when readers present\n\n    lock.unlock_shared();\n    lock.unlock_shared();\n    EXPECT_TRUE(lock.try_lock());\
+  \ // Writer succeeds once readers release\n    lock.unlock();\n}\n\nTEST(RWSpinLockTest, ExclusiveWriter) {\n    RWSpinLock\
+  \ lock;\n    lock.lock();\n    EXPECT_FALSE(lock.try_lock_shared()); // Readers rejected\n    EXPECT_FALSE(lock.try_lock());\
+  \        // Second writer rejected\n    lock.unlock();\n    EXPECT_TRUE(lock.try_lock_shared());\n    lock.unlock_shared();\n\
+  }\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <thread>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include\
+  \ \"solution.hpp\"\n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(RWSpinLockTest, RAIIReadGuard)\
+  \ {\n    RWSpinLock lock;\n    {\n        ReadGuard guard(lock);\n        EXPECT_FALSE(lock.try_lock());\n    }\n    EXPECT_TRUE(lock.try_lock());\n\
+  \    lock.unlock();\n}\n\nTEST(RWSpinLockTest, RAIIWriteGuard) {\n    RWSpinLock lock;\n    {\n        WriteGuard guard(lock);\n\
+  \        EXPECT_FALSE(lock.try_lock_shared());\n    }\n    EXPECT_TRUE(lock.try_lock_shared());\n    lock.unlock_shared();\n\
+  }\n\nTEST(RWSpinLockTest, ConcurrentReadersAndWriters) {\n    RWSpinLock lock;\n    int shared_val = 0;\n    std::vector<std::thread>\
+  \ threads;\n\n    // 4 writers\n    for (int i = 0; i < 4; ++i) {\n        threads.emplace_back([&lock, &shared_val]() {\n\
+  \            for (int j = 0; j < 50; ++j) {\n                WriteGuard g(lock);\n                shared_val++;\n      \
+  \      }\n        });\n    }\n\n    // 4 readers\n    for (int i = 0; i < 4; ++i) {\n        threads.emplace_back([&lock,\
+  \ &shared_val]() {\n            for (int j = 0; j < 50; ++j) {\n                ReadGuard g(lock);\n                int\
+  \ val = shared_val;\n                (void)val;\n            }\n        });\n    }\n\n    for (auto& t : threads) {\n  \
+  \      t.join();\n    }\n\n    EXPECT_EQ(shared_val, 200);\n}\n\nTEST(RWSpinLockTest, TryLockFailureUnderWriteLock) {\n\
+  \    RWSpinLock lock;\n    lock.lock();\n    EXPECT_FALSE(lock.try_lock());\n    EXPECT_FALSE(lock.try_lock_shared());\n\
+  \    lock.unlock();\n}\n\nTEST(RWSpinLockTest, SuccessiveAcquireRelease) {\n    RWSpinLock lock;\n    for (int i = 0; i\
+  \ < 100; ++i) {\n        lock.lock();\n        lock.unlock();\n        lock.lock_shared();\n        lock.unlock_shared();\n\
+  \    }\n}\n\nTEST(RWSpinLockTest, MultipleReadGuards) {\n    RWSpinLock lock;\n    {\n        ReadGuard r1(lock);\n    \
+  \    ReadGuard r2(lock);\n        EXPECT_FALSE(lock.try_lock());\n    }\n    EXPECT_TRUE(lock.try_lock());\n    lock.unlock();\n\
+  }\n"

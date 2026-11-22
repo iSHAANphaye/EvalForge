@@ -1,0 +1,77 @@
+task_id: EF-PY-006
+title: Disjoint Set Union with Path Compression and Rank
+language: python
+difficulty: easy
+category: data_structures
+tags:
+- union-find
+- disjoint-set
+- graphs
+- data_structures
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Disjoint Set Union with Path Compression and Rank\n\nImplement a generic Disjoint Set Union (DSU / Union-Find)\
+  \ data structure supporting near-constant time amortized operations using path compression and union by rank.\n\n## Requirements\n\
+  \nImplement the class `DisjointSet`:\n\n- `make_set(self, x: Any) -> None`:\n  Adds a new element `x` as an independent\
+  \ set of size 1. If `x` already exists, does nothing.\n- `find(self, x: Any) -> Any`:\n  Finds the representative (root)\
+  \ of the set containing `x`, applying two-pass or recursive path compression.\n  Raises `KeyError` if `x` has not been added\
+  \ via `make_set`.\n- `union(self, x: Any, y: Any) -> bool`:\n  Unites the sets containing elements `x` and `y` using union\
+  \ by rank.\n  If the root ranks are equal, increments the rank of the new root.\n  Updates the component size accordingly.\n\
+  \  Returns `True` if two disjoint sets were united, or `False` if `x` and `y` were already in the same set.\n  Raises `KeyError`\
+  \ if either `x` or `y` is not registered.\n- `connected(self, x: Any, y: Any) -> bool`:\n  Returns `True` if `x` and `y`\
+  \ share the same representative, `False` otherwise.\n  Raises `KeyError` if either element is not registered.\n- `get_component_size(self,\
+  \ x: Any) -> int`:\n  Returns the total number of elements in the component containing `x`.\n- `count_components(self) ->\
+  \ int`:\n  Returns the total number of distinct disjoint sets (connected components).\n"
+starter_code: "from typing import Any\n\n\nclass DisjointSet:\n    def __init__(self) -> None:\n        \"\"\"Initialize empty\
+  \ Disjoint Set.\"\"\"\n        pass\n\n    def make_set(self, x: Any) -> None:\n        \"\"\"Create a new set for element\
+  \ x.\"\"\"\n        pass\n\n    def find(self, x: Any) -> Any:\n        \"\"\"Find representative of set containing x with\
+  \ path compression.\"\"\"\n        pass\n\n    def union(self, x: Any, y: Any) -> bool:\n        \"\"\"Union sets containing\
+  \ x and y by rank.\"\"\"\n        pass\n\n    def connected(self, x: Any, y: Any) -> bool:\n        \"\"\"Return True if\
+  \ x and y are in same set.\"\"\"\n        pass\n\n    def get_component_size(self, x: Any) -> int:\n        \"\"\"Return\
+  \ size of component containing x.\"\"\"\n        pass\n\n    def count_components(self) -> int:\n        \"\"\"Return number\
+  \ of disjoint components.\"\"\"\n        pass\n"
+canonical_solution: "from typing import Any\n\n\nclass DisjointSet:\n    def __init__(self) -> None:\n        self._parent:\
+  \ dict[Any, Any] = {}\n        self._rank: dict[Any, int] = {}\n        self._size: dict[Any, int] = {}\n        self._num_components:\
+  \ int = 0\n\n    def make_set(self, x: Any) -> None:\n        if x in self._parent:\n            return\n        self._parent[x]\
+  \ = x\n        self._rank[x] = 0\n        self._size[x] = 1\n        self._num_components += 1\n\n    def find(self, x:\
+  \ Any) -> Any:\n        if x not in self._parent:\n            raise KeyError(f\"Element {x} not found in DisjointSet\"\
+  )\n        # Iterative path compression to avoid recursion limit\n        root = x\n        while root != self._parent[root]:\n\
+  \            root = self._parent[root]\n        curr = x\n        while curr != root:\n            nxt = self._parent[curr]\n\
+  \            self._parent[curr] = root\n            curr = nxt\n        return root\n\n    def union(self, x: Any, y: Any)\
+  \ -> bool:\n        root_x = self.find(x)\n        root_y = self.find(y)\n\n        if root_x == root_y:\n            return\
+  \ False\n\n        if self._rank[root_x] < self._rank[root_y]:\n            root_x, root_y = root_y, root_x\n\n        self._parent[root_y]\
+  \ = root_x\n        self._size[root_x] += self._size[root_y]\n        if self._rank[root_x] == self._rank[root_y]:\n   \
+  \         self._rank[root_x] += 1\n\n        self._num_components -= 1\n        return True\n\n    def connected(self, x:\
+  \ Any, y: Any) -> bool:\n        return self.find(x) == self.find(y)\n\n    def get_component_size(self, x: Any) -> int:\n\
+  \        root = self.find(x)\n        return self._size[root]\n\n    def count_components(self) -> int:\n        return\
+  \ self._num_components\n"
+visible_tests: "def test_dsu_basic_operations():\n    dsu = DisjointSet()\n    for item in [\"A\", \"B\", \"C\", \"D\"]:\n\
+  \        dsu.make_set(item)\n\n    assert dsu.count_components() == 4\n    assert dsu.connected(\"A\", \"B\") is False\n\
+  \    assert dsu.union(\"A\", \"B\") is True\n    assert dsu.connected(\"A\", \"B\") is True\n    assert dsu.count_components()\
+  \ == 3\n    assert dsu.get_component_size(\"A\") == 2\n\n\ndef test_dsu_transitive_connectivity():\n    dsu = DisjointSet()\n\
+  \    for i in range(5):\n        dsu.make_set(i)\n\n    dsu.union(0, 1)\n    dsu.union(1, 2)\n    assert dsu.connected(0,\
+  \ 2) is True\n    assert dsu.get_component_size(0) == 3\n    assert dsu.connected(0, 4) is False\n"
+hidden_tests: "import pytest\n\n\ndef test_dsu_idempotent_union():\n    dsu = DisjointSet()\n    dsu.make_set(1)\n    dsu.make_set(2)\n\
+  \    assert dsu.union(1, 2) is True\n    assert dsu.union(1, 2) is False  # already connected\n    assert dsu.count_components()\
+  \ == 1\n\n\ndef test_dsu_unknown_element_raises_key_error():\n    dsu = DisjointSet()\n    dsu.make_set(10)\n    with pytest.raises(KeyError):\n\
+  \        dsu.find(99)\n    with pytest.raises(KeyError):\n        dsu.union(10, 99)\n    with pytest.raises(KeyError):\n\
+  \        dsu.connected(10, 99)\n\n\ndef test_dsu_component_sizes_tracking():\n    dsu = DisjointSet()\n    for i in range(10):\n\
+  \        dsu.make_set(i)\n\n    dsu.union(0, 1)\n    dsu.union(2, 3)\n    dsu.union(0, 2)\n    assert dsu.get_component_size(3)\
+  \ == 4\n    assert dsu.get_component_size(5) == 1\n    assert dsu.count_components() == 7\n\n\ndef test_dsu_duplicate_make_set_noop():\n\
+  \    dsu = DisjointSet()\n    dsu.make_set(\"x\")\n    dsu.make_set(\"x\")\n    assert dsu.count_components() == 1\n   \
+  \ assert dsu.get_component_size(\"x\") == 1\n\n\ndef test_dsu_large_chain_scale():\n    dsu = DisjointSet()\n    n = 10000\n\
+  \    for i in range(n):\n        dsu.make_set(i)\n\n    for i in range(n - 1):\n        dsu.union(i, i + 1)\n\n    assert\
+  \ dsu.count_components() == 1\n    assert dsu.connected(0, n - 1) is True\n    assert dsu.get_component_size(n // 2) ==\
+  \ n\n\n\ndef test_dsu_star_topology():\n    dsu = DisjointSet()\n    center = 0\n    dsu.make_set(center)\n    for leaf\
+  \ in range(1, 100):\n        dsu.make_set(leaf)\n        dsu.union(center, leaf)\n\n    assert dsu.count_components() ==\
+  \ 1\n    assert dsu.get_component_size(center) == 100\n"

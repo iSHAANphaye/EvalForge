@@ -1,0 +1,103 @@
+task_id: EF-PY-008
+title: Streaming JSON Tokenizer State Machine
+language: python
+difficulty: hard
+category: systems
+tags:
+- lexer
+- state-machine
+- streaming
+- json
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 25
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Streaming JSON Tokenizer State Machine\n\nImplement an incremental streaming JSON lexer / tokenizer state machine\
+  \ that consumes incoming text chunks of arbitrary length and produces complete tokens without buffering the entire payload\
+  \ in memory.\n\n## Requirements\n\nImplement the enum `TokenType`:\n- `LEFT_BRACE`: `{`\n- `RIGHT_BRACE`: `}`\n- `LEFT_BRACKET`:\
+  \ `[`\n- `RIGHT_BRACKET`: `]`\n- `COLON`: `:`\n- `COMMA`: `,`\n- `STRING`: String value with escapes unescaped (e.g. `\"\
+  hello\"`)\n- `NUMBER`: Integer or floating-point value (e.g. `42`, `-3.14`)\n- `BOOLEAN`: Boolean value (`True` or `False`)\n\
+  - `NULL`: `None`\n\nImplement the dataclass `Token`:\n- `type: TokenType`\n- `value: Any`\n\nImplement `StreamingJSONTokenizer`:\n\
+  - `feed(self, chunk: str) -> list[Token]`:\n  Feeds an arbitrary string fragment. Returns a list of all tokens completed\
+  \ by this chunk. Tokens split across boundaries must remain buffered until finished.\n- `finish(self) -> list[Token]`:\n\
+  \  Signals end-of-input. Flushes any remaining terminal tokens (such as trailing numbers or literals).\n  Raises `ValueError`\
+  \ if stream ends inside an unfinished string, escape sequence, or malformed literal.\n"
+starter_code: "from dataclasses import dataclass\nfrom enum import Enum, auto\nfrom typing import Any\n\n\nclass TokenType(Enum):\n\
+  \    LEFT_BRACE = auto()\n    RIGHT_BRACE = auto()\n    LEFT_BRACKET = auto()\n    RIGHT_BRACKET = auto()\n    COLON = auto()\n\
+  \    COMMA = auto()\n    STRING = auto()\n    NUMBER = auto()\n    BOOLEAN = auto()\n    NULL = auto()\n\n\n@dataclass\n\
+  class Token:\n    type: TokenType\n    value: Any\n\n\nclass StreamingJSONTokenizer:\n    def __init__(self) -> None:\n\
+  \        \"\"\"Initialize streaming tokenizer state machine.\"\"\"\n        pass\n\n    def feed(self, chunk: str) -> list[Token]:\n\
+  \        \"\"\"Feed string chunk and return newly completed tokens.\"\"\"\n        pass\n\n    def finish(self) -> list[Token]:\n\
+  \        \"\"\"Flush final tokens or raise ValueError on incomplete input.\"\"\"\n        pass\n"
+canonical_solution: "from dataclasses import dataclass\nfrom enum import Enum, auto\nfrom typing import Any\n\n\nclass TokenType(Enum):\n\
+  \    LEFT_BRACE = auto()\n    RIGHT_BRACE = auto()\n    LEFT_BRACKET = auto()\n    RIGHT_BRACKET = auto()\n    COLON = auto()\n\
+  \    COMMA = auto()\n    STRING = auto()\n    NUMBER = auto()\n    BOOLEAN = auto()\n    NULL = auto()\n\n\n@dataclass\n\
+  class Token:\n    type: TokenType\n    value: Any\n\n\nclass StreamingJSONTokenizer:\n    def __init__(self) -> None:\n\
+  \        self._buf = \"\"\n        self._in_string = False\n        self._escape = False\n        self._str_chars: list[str]\
+  \ = []\n\n    def feed(self, chunk: str) -> list[Token]:\n        self._buf += chunk\n        return self._tokenize(is_eof=False)\n\
+  \n    def finish(self) -> list[Token]:\n        tokens = self._tokenize(is_eof=True)\n        if self._in_string:\n    \
+  \        raise ValueError(\"Unterminated string literal at EOF\")\n        remaining = self._buf.strip()\n        if remaining:\n\
+  \            raise ValueError(f\"Unrecognized syntax at EOF: '{remaining}'\")\n        return tokens\n\n    def _tokenize(self,\
+  \ is_eof: bool) -> list[Token]:\n        tokens: list[Token] = []\n        i = 0\n        n = len(self._buf)\n\n       \
+  \ while i < n:\n            c = self._buf[i]\n\n            if self._in_string:\n                if self._escape:\n    \
+  \                if c == '\"':\n                        self._str_chars.append('\"')\n                    elif c == '\\\\\
+  ':\n                        self._str_chars.append('\\\\')\n                    elif c == '/':\n                       \
+  \ self._str_chars.append('/')\n                    elif c == 'b':\n                        self._str_chars.append('\\b')\n\
+  \                    elif c == 'f':\n                        self._str_chars.append('\\f')\n                    elif c ==\
+  \ 'n':\n                        self._str_chars.append('\\n')\n                    elif c == 'r':\n                    \
+  \    self._str_chars.append('\\r')\n                    elif c == 't':\n                        self._str_chars.append('\\\
+  t')\n                    else:\n                        self._str_chars.append(c)\n                    self._escape = False\n\
+  \                elif c == '\\\\':\n                    self._escape = True\n                elif c == '\"':\n         \
+  \           self._in_string = False\n                    tokens.append(Token(TokenType.STRING, \"\".join(self._str_chars)))\n\
+  \                    self._str_chars = []\n                else:\n                    self._str_chars.append(c)\n      \
+  \          i += 1\n                continue\n\n            # Outside string\n            if c.isspace():\n             \
+  \   i += 1\n                continue\n\n            if c == '{':\n                tokens.append(Token(TokenType.LEFT_BRACE,\
+  \ \"{\"))\n                i += 1\n            elif c == '}':\n                tokens.append(Token(TokenType.RIGHT_BRACE,\
+  \ \"}\"))\n                i += 1\n            elif c == '[':\n                tokens.append(Token(TokenType.LEFT_BRACKET,\
+  \ \"[\"))\n                i += 1\n            elif c == ']':\n                tokens.append(Token(TokenType.RIGHT_BRACKET,\
+  \ \"]\"))\n                i += 1\n            elif c == ':':\n                tokens.append(Token(TokenType.COLON, \":\"\
+  ))\n                i += 1\n            elif c == ',':\n                tokens.append(Token(TokenType.COMMA, \",\"))\n \
+  \               i += 1\n            elif c == '\"':\n                self._in_string = True\n                self._str_chars\
+  \ = []\n                self._escape = False\n                i += 1\n            else:\n                # Potential number,\
+  \ boolean (true/false), or null\n                start = i\n                while i < n and (self._buf[i].isalnum() or self._buf[i]\
+  \ in \"-+.\"):\n                    i += 1\n\n                word = self._buf[start:i]\n\n                if not is_eof\
+  \ and i == n:\n                    # Token might be incomplete across chunk boundary\n                    i = start\n  \
+  \                  break\n\n                if word == \"true\":\n                    tokens.append(Token(TokenType.BOOLEAN,\
+  \ True))\n                elif word == \"false\":\n                    tokens.append(Token(TokenType.BOOLEAN, False))\n\
+  \                elif word == \"null\":\n                    tokens.append(Token(TokenType.NULL, None))\n              \
+  \  else:\n                    try:\n                        if \".\" in word or \"e\" in word.lower():\n               \
+  \             tokens.append(Token(TokenType.NUMBER, float(word)))\n                        else:\n                     \
+  \       tokens.append(Token(TokenType.NUMBER, int(word)))\n                    except ValueError:\n                    \
+  \    raise ValueError(f\"Malformed token: '{word}'\")\n\n        self._buf = self._buf[i:]\n        return tokens\n"
+visible_tests: "def test_json_tokenizer_basic():\n    tok = StreamingJSONTokenizer()\n    tokens = tok.feed('{\"name\": \"\
+  Alice\", \"age\": 30}')\n    tokens += tok.finish()\n\n    types = [t.type for t in tokens]\n    assert types == [\n   \
+  \     TokenType.LEFT_BRACE,\n        TokenType.STRING,\n        TokenType.COLON,\n        TokenType.STRING,\n        TokenType.COMMA,\n\
+  \        TokenType.STRING,\n        TokenType.COLON,\n        TokenType.NUMBER,\n        TokenType.RIGHT_BRACE,\n    ]\n\
+  \    assert tokens[1].value == \"name\"\n    assert tokens[3].value == \"Alice\"\n    assert tokens[7].value == 30\n\n\n\
+  def test_json_tokenizer_chunk_streaming():\n    tok = StreamingJSONTokenizer()\n    t1 = tok.feed('{\"count\": ')\n    t2\
+  \ = tok.feed('12')\n    t3 = tok.feed('34, \"active\": tru')\n    t4 = tok.feed('e}')\n    t5 = tok.finish()\n\n    all_tokens\
+  \ = t1 + t2 + t3 + t4 + t5\n    vals = [(t.type, t.value) for t in all_tokens]\n    assert (TokenType.NUMBER, 1234) in vals\n\
+  \    assert (TokenType.BOOLEAN, True) in vals\n"
+hidden_tests: "import pytest\n\n\ndef test_escaped_string_tokens():\n    tok = StreamingJSONTokenizer()\n    tokens = tok.feed('\"\
+  Line 1\\\\nLine 2\\\\tTabbed \\\\\\\"Quote\\\\\\\"\"')\n    tokens += tok.finish()\n    assert len(tokens) == 1\n    assert\
+  \ tokens[0].type == TokenType.STRING\n    assert tokens[0].value == 'Line 1\\nLine 2\\tTabbed \"Quote\"'\n\n\ndef test_floats_and_negative_numbers():\n\
+  \    tok = StreamingJSONTokenizer()\n    tokens = tok.feed('[-42, 3.1415, -0.5, 1e-3]')\n    tokens += tok.finish()\n  \
+  \  vals = [t.value for t in tokens if t.type == TokenType.NUMBER]\n    assert vals == [-42, 3.1415, -0.5, 0.001]\n\n\ndef\
+  \ test_null_and_boolean_literals():\n    tok = StreamingJSONTokenizer()\n    tokens = tok.feed('[true, false, null]')\n\
+  \    tokens += tok.finish()\n    res = [(t.type, t.value) for t in tokens if t.type in (TokenType.BOOLEAN, TokenType.NULL)]\n\
+  \    assert res == [(TokenType.BOOLEAN, True), (TokenType.BOOLEAN, False), (TokenType.NULL, None)]\n\n\ndef test_character_by_character_feeding():\n\
+  \    tok = StreamingJSONTokenizer()\n    raw = '{\"arr\": [1, 2]}'\n    collected = []\n    for char in raw:\n        collected.extend(tok.feed(char))\n\
+  \    collected.extend(tok.finish())\n    types = [t.type for t in collected]\n    assert types == [\n        TokenType.LEFT_BRACE,\n\
+  \        TokenType.STRING,\n        TokenType.COLON,\n        TokenType.LEFT_BRACKET,\n        TokenType.NUMBER,\n     \
+  \   TokenType.COMMA,\n        TokenType.NUMBER,\n        TokenType.RIGHT_BRACKET,\n        TokenType.RIGHT_BRACE,\n    ]\n\
+  \n\ndef test_unclosed_string_raises():\n    tok = StreamingJSONTokenizer()\n    tok.feed('{\"title\": \"incomplete')\n \
+  \   with pytest.raises(ValueError):\n        tok.finish()\n\n\ndef test_malformed_token_raises():\n    tok = StreamingJSONTokenizer()\n\
+  \    with pytest.raises(ValueError):\n        tok.feed('{\"k\": bad_token}')\n        tok.finish()\n"

@@ -1,0 +1,85 @@
+task_id: EF-PY-014
+title: A* 2D Grid Pathfinding with Dynamic Obstacles
+language: python
+difficulty: medium
+category: algorithmic
+tags:
+- a-star
+- pathfinding
+- grid
+- heuristics
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# A* 2D Grid Pathfinding with Dynamic Obstacles\n\nImplement the A* pathfinding algorithm on a 2D integer grid supporting\
+  \ dynamic obstacle placement, diagonal movement toggling, and admissible heuristic estimates.\n\n## Requirements\n\nImplement\
+  \ the class `AStarGrid`:\n\n- `__init__(self, width: int, height: int, allow_diagonal: bool = False)`:\n  Initializes grid\
+  \ of size `width x height` (coordinates `0 <= x < width`, `0 <= y < height`).\n  If `allow_diagonal` is `False`, allows\
+  \ 4-cardinal moves (cost 1.0).\n  If `allow_diagonal` is `True`, allows 8-way moves (cardinal cost 1.0, diagonal cost $\\\
+  sqrt{2} \\approx 1.4142$).\n- `set_obstacle(self, x: int, y: int, is_blocked: bool = True) -> None`:\n  Marks `(x, y)` as\
+  \ an obstacle (`True`) or walkable space (`False`).\n- `is_obstacle(self, x: int, y: int) -> bool`:\n  Returns `True` if\
+  \ `(x, y)` is blocked, `False` otherwise.\n- `find_path(self, start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int,\
+  \ int]] | None`:\n  Finds the optimal shortest path from `start` to `goal`.\n  Returns the ordered list of coordinates `[(x0,\
+  \ y0), (x1, y1), ..., (xg, yg)]` including both `start` and `goal`.\n  Returns `None` if no valid path exists or if `start`\
+  \ or `goal` is blocked/out of bounds.\n  If `start == goal`, returns `[start]`.\n"
+starter_code: "class AStarGrid:\n    def __init__(self, width: int, height: int, allow_diagonal: bool = False) -> None:\n\
+  \        \"\"\"Initialize A* 2D grid.\"\"\"\n        pass\n\n    def set_obstacle(self, x: int, y: int, is_blocked: bool\
+  \ = True) -> None:\n        \"\"\"Set or clear obstacle at coordinate.\"\"\"\n        pass\n\n    def is_obstacle(self,\
+  \ x: int, y: int) -> bool:\n        \"\"\"Check if coordinate is an obstacle.\"\"\"\n        pass\n\n    def find_path(self,\
+  \ start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]] | None:\n        \"\"\"Find shortest path using\
+  \ A* search.\"\"\"\n        pass\n"
+canonical_solution: "import heapq\nimport math\n\n\nclass AStarGrid:\n    def __init__(self, width: int, height: int, allow_diagonal:\
+  \ bool = False) -> None:\n        if width <= 0 or height <= 0:\n            raise ValueError(\"Width and height must be\
+  \ positive\")\n        self.width = width\n        self.height = height\n        self.allow_diagonal = allow_diagonal\n\
+  \        self.obstacles: set[tuple[int, int]] = set()\n\n    def set_obstacle(self, x: int, y: int, is_blocked: bool = True)\
+  \ -> None:\n        if not (0 <= x < self.width and 0 <= y < self.height):\n            raise ValueError(f\"Coordinate ({x},\
+  \ {y}) out of bounds\")\n        if is_blocked:\n            self.obstacles.add((x, y))\n        else:\n            self.obstacles.discard((x,\
+  \ y))\n\n    def is_obstacle(self, x: int, y: int) -> bool:\n        return (x, y) in self.obstacles\n\n    def _heuristic(self,\
+  \ a: tuple[int, int], b: tuple[int, int]) -> float:\n        dx = abs(a[0] - b[0])\n        dy = abs(a[1] - b[1])\n    \
+  \    if self.allow_diagonal:\n            # Octile distance\n            return (dx + dy) + (math.sqrt(2) - 2) * min(dx,\
+  \ dy)\n        return float(dx + dy)\n\n    def _neighbors(self, pos: tuple[int, int]) -> list[tuple[tuple[int, int], float]]:\n\
+  \        x, y = pos\n        dirs = [(1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0)]\n        if self.allow_diagonal:\n\
+  \            dirs.extend([(1, 1, math.sqrt(2)), (1, -1, math.sqrt(2)),\n                         (-1, 1, math.sqrt(2)),\
+  \ (-1, -1, math.sqrt(2))])\n\n        res = []\n        for dx, dy, cost in dirs:\n            nx, ny = x + dx, y + dy\n\
+  \            if 0 <= nx < self.width and 0 <= ny < self.height:\n                if (nx, ny) not in self.obstacles:\n  \
+  \                  res.append(((nx, ny), cost))\n        return res\n\n    def find_path(self, start: tuple[int, int], goal:\
+  \ tuple[int, int]) -> list[tuple[int, int]] | None:\n        if not (0 <= start[0] < self.width and 0 <= start[1] < self.height):\n\
+  \            return None\n        if not (0 <= goal[0] < self.width and 0 <= goal[1] < self.height):\n            return\
+  \ None\n        if start in self.obstacles or goal in self.obstacles:\n            return None\n        if start == goal:\n\
+  \            return [start]\n\n        open_set: list[tuple[float, float, tuple[int, int]]] = []\n        heapq.heappush(open_set,\
+  \ (self._heuristic(start, goal), 0.0, start))\n\n        came_from: dict[tuple[int, int], tuple[int, int]] = {}\n      \
+  \  g_score: dict[tuple[int, int], float] = {start: 0.0}\n\n        while open_set:\n            _, current_g, current =\
+  \ heapq.heappop(open_set)\n\n            if current == goal:\n                path = []\n                curr: tuple[int,\
+  \ int] | None = goal\n                while curr is not None:\n                    path.append(curr)\n                 \
+  \   curr = came_from.get(curr)\n                path.reverse()\n                return path\n\n            if current_g\
+  \ > g_score.get(current, float('inf')):\n                continue\n\n            for neighbor, cost in self._neighbors(current):\n\
+  \                tentative_g = current_g + cost\n                if tentative_g < g_score.get(neighbor, float('inf')):\n\
+  \                    came_from[neighbor] = current\n                    g_score[neighbor] = tentative_g\n              \
+  \      f = tentative_g + self._heuristic(neighbor, goal)\n                    heapq.heappush(open_set, (f, tentative_g,\
+  \ neighbor))\n\n        return None\n"
+visible_tests: "def test_astar_straight_line():\n    grid = AStarGrid(width=5, height=5)\n    path = grid.find_path((0, 0),\
+  \ (0, 3))\n    assert path == [(0, 0), (0, 1), (0, 2), (0, 3)]\n\n\ndef test_astar_obstacle_detour():\n    grid = AStarGrid(width=4,\
+  \ height=4)\n    # Place wall at (1, 0), (1, 1), (1, 2)\n    grid.set_obstacle(1, 0)\n    grid.set_obstacle(1, 1)\n    grid.set_obstacle(1,\
+  \ 2)\n\n    path = grid.find_path((0, 0), (2, 0))\n    assert path is not None\n    # Must detour around (1, 3)\n    assert\
+  \ (1, 3) in path\n    assert path[0] == (0, 0)\n    assert path[-1] == (2, 0)\n"
+hidden_tests: "def test_astar_no_path_blocked():\n    grid = AStarGrid(width=3, height=3)\n    for y in range(3):\n      \
+  \  grid.set_obstacle(1, y)\n    assert grid.find_path((0, 0), (2, 2)) is None\n\n\ndef test_start_or_goal_is_obstacle():\n\
+  \    grid = AStarGrid(width=5, height=5)\n    grid.set_obstacle(0, 0)\n    assert grid.find_path((0, 0), (4, 4)) is None\n\
+  \    grid.set_obstacle(0, 0, False)\n    grid.set_obstacle(4, 4)\n    assert grid.find_path((0, 0), (4, 4)) is None\n\n\n\
+  def test_start_equals_goal():\n    grid = AStarGrid(width=5, height=5)\n    assert grid.find_path((2, 2), (2, 2)) == [(2,\
+  \ 2)]\n\n\ndef test_diagonal_movement_efficiency():\n    grid = AStarGrid(width=4, height=4, allow_diagonal=True)\n    path\
+  \ = grid.find_path((0, 0), (3, 3))\n    assert path == [(0, 0), (1, 1), (2, 2), (3, 3)]\n\n\ndef test_clear_obstacle():\n\
+  \    grid = AStarGrid(width=3, height=3)\n    grid.set_obstacle(1, 1)\n    assert grid.is_obstacle(1, 1) is True\n    grid.set_obstacle(1,\
+  \ 1, is_blocked=False)\n    assert grid.is_obstacle(1, 1) is False\n    path = grid.find_path((0, 1), (2, 1))\n    assert\
+  \ (1, 1) in path\n\n\ndef test_large_maze_scale():\n    grid = AStarGrid(width=50, height=50)\n    for x in range(1, 48):\n\
+  \        grid.set_obstacle(x, 25)\n    # Gap at x=48\n    path = grid.find_path((0, 0), (0, 49))\n    assert path is not\
+  \ None\n    assert path[0] == (0, 0)\n    assert path[-1] == (0, 49)\n"

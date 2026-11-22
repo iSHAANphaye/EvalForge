@@ -1,0 +1,20 @@
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/home/sandbox_user/.local/bin:$PATH"
+
+# Create unprivileged user and group (UID 10001, GID 10001) with home directory
+RUN groupadd -g 10001 sandbox_user && \
+    useradd -u 10001 -g 10001 -m -s /bin/bash sandbox_user && \
+    mkdir -p /workspace/run && \
+    chown -R sandbox_user:sandbox_user /workspace/run && \
+    chmod 0755 /workspace/run
+
+# Install test runner and JSON reporting dependencies
+RUN pip install --no-cache-dir "pytest>=8.0.0" "pytest-json-report>=1.5.0"
+
+USER 10001:10001
+WORKDIR /workspace/run
+
+CMD ["tail", "-f", "/dev/null"]

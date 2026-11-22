@@ -1,0 +1,93 @@
+task_id: EF-PY-012
+title: Raft Log Compaction Buffer with Index Offsets
+language: python
+difficulty: hard
+category: systems
+tags:
+- raft
+- consensus
+- distributed-systems
+- compaction
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Raft Log Compaction Buffer with Index Offsets\n\nImplement a replicated log buffer for the Raft distributed consensus\
+  \ protocol that supports log compaction (snapshotting) with 1-based logical index offset mapping.\n\n## Requirements\n\n\
+  Implement the dataclass `LogEntry`:\n- `index: int`: 1-based monotonic log index.\n- `term: int`: Election term during which\
+  \ the entry was proposed.\n- `command: Any`: Arbitrary state-machine payload.\n\nImplement the class `RaftLogBuffer`:\n\n\
+  - `__init__(self, initial_snapshot_index: int = 0, initial_snapshot_term: int = 0)`:\n  Initializes log buffer with the\
+  \ last included snapshot index and term.\n- `append(self, term: int, command: Any) -> LogEntry`:\n  Appends a new entry\
+  \ with `index = self.last_index() + 1` and returns the created `LogEntry`.\n- `truncate_after(self, index: int) -> None`:\n\
+  \  Removes all entries with `entry.index > index` to handle leader conflict resolution.\n- `compact(self, snapshot_index:\
+  \ int, snapshot_term: int) -> bool`:\n  Discards all buffered entries up to and including `snapshot_index`. Updates `last_included_index`\
+  \ and `last_included_term`.\n  Returns `True` if compaction was applied, or `False` if `snapshot_index <= last_included_index`.\n\
+  - `get_entry(self, index: int) -> LogEntry | None`:\n  Returns the entry at logical `index`. Returns `None` if `index <=\
+  \ last_included_index` (already compacted) or `index > last_index()`.\n- `get_entries_from(self, index: int) -> list[LogEntry]`:\n\
+  \  Returns all buffered entries from logical `index` onward. Returns empty list if `index > last_index()`.\n  Raises `ValueError`\
+  \ if `index <= last_included_index` (compacted data requested).\n- `last_index(self) -> int`:\n  Returns the highest index\
+  \ stored in log or snapshot.\n- `last_term(self) -> int`:\n  Returns the term associated with `last_index()`.\n- `first_available_index(self)\
+  \ -> int`:\n  Returns `last_included_index + 1`.\n"
+starter_code: "from dataclasses import dataclass\nfrom typing import Any\n\n\n@dataclass\nclass LogEntry:\n    index: int\n\
+  \    term: int\n    command: Any\n\n\nclass RaftLogBuffer:\n    def __init__(self, initial_snapshot_index: int = 0, initial_snapshot_term:\
+  \ int = 0) -> None:\n        \"\"\"Initialize log buffer with initial snapshot index and term.\"\"\"\n        pass\n\n \
+  \   def append(self, term: int, command: Any) -> LogEntry:\n        \"\"\"Append new entry to log.\"\"\"\n        pass\n\
+  \n    def truncate_after(self, index: int) -> None:\n        \"\"\"Truncate all entries following index.\"\"\"\n       \
+  \ pass\n\n    def compact(self, snapshot_index: int, snapshot_term: int) -> bool:\n        \"\"\"Discard entries up to snapshot_index.\"\
+  \"\"\n        pass\n\n    def get_entry(self, index: int) -> LogEntry | None:\n        \"\"\"Retrieve entry by logical index.\"\
+  \"\"\n        pass\n\n    def get_entries_from(self, index: int) -> list[LogEntry]:\n        \"\"\"Retrieve entries from\
+  \ index onwards.\"\"\"\n        pass\n\n    def last_index(self) -> int:\n        \"\"\"Return highest index.\"\"\"\n  \
+  \      pass\n\n    def last_term(self) -> int:\n        \"\"\"Return term of highest index.\"\"\"\n        pass\n\n    def\
+  \ first_available_index(self) -> int:\n        \"\"\"Return lowest uncompacted logical index.\"\"\"\n        pass\n"
+canonical_solution: "from dataclasses import dataclass\nfrom typing import Any\n\n\n@dataclass\nclass LogEntry:\n    index:\
+  \ int\n    term: int\n    command: Any\n\n\nclass RaftLogBuffer:\n    def __init__(self, initial_snapshot_index: int = 0,\
+  \ initial_snapshot_term: int = 0) -> None:\n        self._snapshot_index = initial_snapshot_index\n        self._snapshot_term\
+  \ = initial_snapshot_term\n        self._entries: list[LogEntry] = []\n\n    def _to_physical(self, logical_index: int)\
+  \ -> int:\n        return logical_index - (self._snapshot_index + 1)\n\n    def append(self, term: int, command: Any) ->\
+  \ LogEntry:\n        new_index = self.last_index() + 1\n        entry = LogEntry(index=new_index, term=term, command=command)\n\
+  \        self._entries.append(entry)\n        return entry\n\n    def truncate_after(self, index: int) -> None:\n      \
+  \  if index < self._snapshot_index:\n            return\n        phys_idx = self._to_physical(index)\n        if phys_idx\
+  \ >= 0:\n            self._entries = self._entries[:phys_idx + 1]\n\n    def compact(self, snapshot_index: int, snapshot_term:\
+  \ int) -> bool:\n        if snapshot_index <= self._snapshot_index:\n            return False\n\n        if snapshot_index\
+  \ >= self.last_index():\n            self._entries.clear()\n        else:\n            phys_idx = self._to_physical(snapshot_index)\n\
+  \            self._entries = self._entries[phys_idx + 1:]\n\n        self._snapshot_index = snapshot_index\n        self._snapshot_term\
+  \ = snapshot_term\n        return True\n\n    def get_entry(self, index: int) -> LogEntry | None:\n        if index <= self._snapshot_index\
+  \ or index > self.last_index():\n            return None\n        phys_idx = self._to_physical(index)\n        if 0 <= phys_idx\
+  \ < len(self._entries):\n            return self._entries[phys_idx]\n        return None\n\n    def get_entries_from(self,\
+  \ index: int) -> list[LogEntry]:\n        if index <= self._snapshot_index:\n            raise ValueError(f\"Requested index\
+  \ {index} has been compacted (snapshot={self._snapshot_index})\")\n        if index > self.last_index():\n            return\
+  \ []\n        phys_idx = self._to_physical(index)\n        return list(self._entries[phys_idx:])\n\n    def last_index(self)\
+  \ -> int:\n        if self._entries:\n            return self._entries[-1].index\n        return self._snapshot_index\n\n\
+  \    def last_term(self) -> int:\n        if self._entries:\n            return self._entries[-1].term\n        return self._snapshot_term\n\
+  \n    def first_available_index(self) -> int:\n        return self._snapshot_index + 1\n"
+visible_tests: "def test_raft_log_basic_append_get():\n    buf = RaftLogBuffer()\n    e1 = buf.append(term=1, command=\"SET\
+  \ x=10\")\n    e2 = buf.append(term=1, command=\"SET y=20\")\n    assert e1.index == 1\n    assert e2.index == 2\n    assert\
+  \ buf.last_index() == 2\n    assert buf.last_term() == 1\n    assert buf.get_entry(1) == e1\n    assert buf.get_entry(2)\
+  \ == e2\n\n\ndef test_raft_log_compaction():\n    buf = RaftLogBuffer()\n    for i in range(1, 6):\n        buf.append(term=1,\
+  \ command=f\"cmd_{i}\")\n\n    assert buf.compact(snapshot_index=3, snapshot_term=1) is True\n    assert buf.first_available_index()\
+  \ == 4\n    assert buf.get_entry(2) is None  # compacted away\n    assert buf.get_entry(4).command == \"cmd_4\"\n    assert\
+  \ buf.last_index() == 5\n"
+hidden_tests: "import pytest\n\n\ndef test_raft_log_truncation():\n    buf = RaftLogBuffer()\n    for i in range(1, 6):\n\
+  \        buf.append(term=1, command=f\"op_{i}\")\n\n    buf.truncate_after(3)\n    assert buf.last_index() == 3\n    assert\
+  \ buf.get_entry(4) is None\n    assert buf.get_entry(5) is None\n\n\ndef test_compact_entire_log():\n    buf = RaftLogBuffer()\n\
+  \    for i in range(1, 4):\n        buf.append(term=2, command=i)\n\n    buf.compact(snapshot_index=3, snapshot_term=2)\n\
+  \    assert buf.last_index() == 3\n    assert buf.last_term() == 2\n    assert buf.first_available_index() == 4\n    # Append\
+  \ after full compaction\n    e = buf.append(term=3, command=\"new_cmd\")\n    assert e.index == 4\n    assert buf.last_index()\
+  \ == 4\n\n\ndef test_get_entries_from_slices():\n    buf = RaftLogBuffer()\n    for i in range(1, 7):\n        buf.append(term=1,\
+  \ command=i)\n\n    entries = buf.get_entries_from(4)\n    assert [e.index for e in entries] == [4, 5, 6]\n    assert buf.get_entries_from(10)\
+  \ == []\n\n\ndef test_get_compacted_entries_raises_value_error():\n    buf = RaftLogBuffer()\n    buf.append(term=1, command=\"\
+  a\")\n    buf.append(term=1, command=\"b\")\n    buf.compact(snapshot_index=1, snapshot_term=1)\n\n    with pytest.raises(ValueError):\n\
+  \        buf.get_entries_from(1)\n\n\ndef test_compaction_with_older_snapshot_rejected():\n    buf = RaftLogBuffer(initial_snapshot_index=5,\
+  \ initial_snapshot_term=2)\n    assert buf.compact(snapshot_index=3, snapshot_term=1) is False\n    assert buf.compact(snapshot_index=5,\
+  \ snapshot_term=2) is False\n\n\ndef test_large_sequence_compaction_scale():\n    buf = RaftLogBuffer()\n    for i in range(1000):\n\
+  \        buf.append(term=i // 100 + 1, command=f\"k_{i}\")\n\n    assert buf.last_index() == 1000\n    buf.compact(snapshot_index=800,\
+  \ snapshot_term=8)\n    assert buf.first_available_index() == 801\n    assert buf.last_index() == 1000\n    assert len(buf.get_entries_from(801))\
+  \ == 200\n"

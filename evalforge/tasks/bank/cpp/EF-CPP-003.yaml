@@ -1,0 +1,97 @@
+task_id: EF-CPP-003
+title: Vectorized Float Dot Product with Manual Unrolling
+language: cpp
+difficulty: medium
+category: algorithmic
+tags:
+- simd
+- vectorization
+- unrolling
+- hpc
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: '# Vectorized Float Dot Product with Manual Unrolling
+
+
+  Implement an optimized vector dot product computation in C++20 for single-precision floats and double-precision floats using
+  4-way loop unrolling to maximize instruction-level parallelism.
+
+
+  ## Requirements
+
+
+  Implement the functions:
+
+  ```cpp
+
+  inline float dot_product(std::span<const float> a, std::span<const float> b);
+
+  inline double dot_product_double(std::span<const double> a, std::span<const double> b);
+
+  ```
+
+
+  ### Constraints:
+
+  - If vectors differ in length, throws `std::invalid_argument("Vector length mismatch")`.
+
+  - If vectors are empty, returns `0.0`.
+
+  - Must compute $\sum_{i=0}^{N-1} a[i] \times b[i]$.
+
+  - Uses multiple independent accumulator variables (`sum0`, `sum1`, `sum2`, `sum3`) to break loop-carried dependency chains
+  and facilitate SIMD vectorization.
+
+  '
+starter_code: '#pragma once
+
+  #include <span>
+
+  #include <stdexcept>
+
+
+  inline float dot_product(std::span<const float> a, std::span<const float> b);
+
+  inline double dot_product_double(std::span<const double> a, std::span<const double> b);
+
+  '
+canonical_solution: "#pragma once\n#include <span>\n#include <stdexcept>\n\ninline float dot_product(std::span<const float>\
+  \ a, std::span<const float> b) {\n    if (a.size() != b.size()) {\n        throw std::invalid_argument(\"Vector length mismatch\"\
+  );\n    }\n\n    const size_t n = a.size();\n    float s0 = 0.0f;\n    float s1 = 0.0f;\n    float s2 = 0.0f;\n    float\
+  \ s3 = 0.0f;\n\n    size_t i = 0;\n    for (; i + 4 <= n; i += 4) {\n        s0 += a[i + 0] * b[i + 0];\n        s1 += a[i\
+  \ + 1] * b[i + 1];\n        s2 += a[i + 2] * b[i + 2];\n        s3 += a[i + 3] * b[i + 3];\n    }\n\n    float total = (s0\
+  \ + s1) + (s2 + s3);\n\n    for (; i < n; ++i) {\n        total += a[i] * b[i];\n    }\n\n    return total;\n}\n\ninline\
+  \ double dot_product_double(std::span<const double> a, std::span<const double> b) {\n    if (a.size() != b.size()) {\n \
+  \       throw std::invalid_argument(\"Vector length mismatch\");\n    }\n\n    const size_t n = a.size();\n    double s0\
+  \ = 0.0;\n    double s1 = 0.0;\n    double s2 = 0.0;\n    double s3 = 0.0;\n\n    size_t i = 0;\n    for (; i + 4 <= n;\
+  \ i += 4) {\n        s0 += a[i + 0] * b[i + 0];\n        s1 += a[i + 1] * b[i + 1];\n        s2 += a[i + 2] * b[i + 2];\n\
+  \        s3 += a[i + 3] * b[i + 3];\n    }\n\n    double total = (s0 + s1) + (s2 + s3);\n\n    for (; i < n; ++i) {\n  \
+  \      total += a[i] * b[i];\n    }\n\n    return total;\n}\n"
+visible_tests: "#include <gtest/gtest.h>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(DotProductTest, SimpleVectors) {\n  \
+  \  std::vector<float> a = {1.0f, 2.0f, 3.0f};\n    std::vector<float> b = {4.0f, 5.0f, 6.0f};\n    // 1*4 + 2*5 + 3*6 =\
+  \ 4 + 10 + 18 = 32\n    EXPECT_FLOAT_EQ(dot_product(a, b), 32.0f);\n}\n\nTEST(DotProductTest, OrthogonalVectors) {\n   \
+  \ std::vector<float> a = {1.0f, 0.0f, 0.0f};\n    std::vector<float> b = {0.0f, 1.0f, 0.0f};\n    EXPECT_FLOAT_EQ(dot_product(a,\
+  \ b), 0.0f);\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(DotProductTest, EmptyVectorsReturnZero)\
+  \ {\n    std::vector<float> empty_a;\n    std::vector<float> empty_b;\n    EXPECT_FLOAT_EQ(dot_product(empty_a, empty_b),\
+  \ 0.0f);\n}\n\nTEST(DotProductTest, MismatchedLengthThrows) {\n    std::vector<float> a = {1.0f, 2.0f};\n    std::vector<float>\
+  \ b = {1.0f, 2.0f, 3.0f};\n    EXPECT_THROW(dot_product(a, b), std::invalid_argument);\n}\n\nTEST(DotProductTest, NegativeNumbers)\
+  \ {\n    std::vector<float> a = {-2.0f, 3.0f, -4.0f};\n    std::vector<float> b = {3.0f, -2.0f, -1.0f};\n    // (-2*3) +\
+  \ (3*-2) + (-4*-1) = -6 - 6 + 4 = -8\n    EXPECT_FLOAT_EQ(dot_product(a, b), -8.0f);\n}\n\nTEST(DotProductTest, UnalignedRemainderTail)\
+  \ {\n    // Size 7: 4 unrolled items + 3 remainder items\n    std::vector<float> a = {1.0f, 1.0f, 1.0f, 1.0f, 2.0f, 2.0f,\
+  \ 2.0f};\n    std::vector<float> b = {2.0f, 2.0f, 2.0f, 2.0f, 3.0f, 3.0f, 3.0f};\n    // 4*(1*2) + 3*(2*3) = 8 + 18 = 26\n\
+  \    EXPECT_FLOAT_EQ(dot_product(a, b), 26.0f);\n}\n\nTEST(DotProductTest, DoublePrecisionLargeScale) {\n    constexpr size_t\
+  \ N = 10000;\n    std::vector<double> a(N, 1.5);\n    std::vector<double> b(N, 2.0);\n    // Each product is 3.0, total\
+  \ = 30000.0\n    EXPECT_DOUBLE_EQ(dot_product_double(a, b), 30000.0);\n}\n\nTEST(DotProductTest, SingleElement) {\n    std::vector<float>\
+  \ a = {5.5f};\n    std::vector<float> b = {2.0f};\n    EXPECT_FLOAT_EQ(dot_product(a, b), 11.0f);\n}\n"

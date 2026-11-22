@@ -1,0 +1,84 @@
+task_id: EF-PY-017
+title: Work-Stealing Task Queue Simulator
+language: python
+difficulty: medium
+category: concurrency
+tags:
+- concurrency
+- work-stealing
+- deque
+- thread-pool
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Work-Stealing Task Queue Simulator\n\nImplement a thread-safe Chase-Lev work-stealing thread pool task scheduler.\n\
+  \n## Operational Model\n\n- Each worker thread owns a double-ended queue (deque).\n- **Worker thread**: Pushes and pops\
+  \ tasks from the **bottom** of its own deque in LIFO order (cache locality).\n- **Thief threads**: When a worker has no\
+  \ local tasks, it steals tasks from the **top** of other workers' deques in FIFO order (fairness).\n\n## Requirements\n\n\
+  Implement the class `WorkStealingPool`:\n\n- `__init__(self, num_workers: int)`:\n  Initializes pool with `num_workers >=\
+  \ 1` worker queues.\n- `submit(self, worker_id: int, task: Any) -> None`:\n  Pushes `task` to the bottom of `worker_id`'s\
+  \ deque.\n- `worker_pop(self, worker_id: int) -> Any | None`:\n  Pops a task from the bottom (LIFO) of `worker_id`'s deque.\
+  \ If empty, attempts to steal from any other worker.\n  Returns `task`, or `None` if all queues are empty.\n- `steal(self,\
+  \ victim_id: int) -> Any | None`:\n  Steals a task from the top (FIFO) of `victim_id`'s deque. Returns `task`, or `None`\
+  \ if victim's deque is empty.\n- `steal_any(self, thief_id: int) -> Any | None`:\n  Attempts to steal from other workers\
+  \ in round-robin order `[(thief_id + 1) % N, (thief_id + 2) % N, ...]`.\n  Returns the first successfully stolen task, or\
+  \ `None` if no tasks are available.\n- `execute_all(self) -> list[tuple[int, Any]]`:\n  Simulates execution of all pending\
+  \ tasks until the entire pool is depleted.\n  Returns an ordered list of `(worker_id_who_executed, task)`.\n"
+starter_code: "from typing import Any\n\n\nclass WorkStealingPool:\n    def __init__(self, num_workers: int) -> None:\n  \
+  \      \"\"\"Initialize work-stealing pool with num_workers deques.\"\"\"\n        pass\n\n    def submit(self, worker_id:\
+  \ int, task: Any) -> None:\n        \"\"\"Submit task to worker's local deque.\"\"\"\n        pass\n\n    def worker_pop(self,\
+  \ worker_id: int) -> Any | None:\n        \"\"\"Pop task LIFO or steal from another worker.\"\"\"\n        pass\n\n    def\
+  \ steal(self, victim_id: int) -> Any | None:\n        \"\"\"Steal task FIFO from victim worker.\"\"\"\n        pass\n\n\
+  \    def steal_any(self, thief_id: int) -> Any | None:\n        \"\"\"Attempt to steal from any other worker.\"\"\"\n  \
+  \      pass\n\n    def execute_all(self) -> list[tuple[int, Any]]:\n        \"\"\"Drain and execute all tasks across workers.\"\
+  \"\"\n        pass\n"
+canonical_solution: "from collections import deque\nimport threading\nfrom typing import Any\n\n\nclass WorkStealingPool:\n\
+  \    def __init__(self, num_workers: int) -> None:\n        if num_workers < 1:\n            raise ValueError(\"num_workers\
+  \ must be at least 1\")\n        self.num_workers = num_workers\n        self._queues: list[deque[Any]] = [deque() for _\
+  \ in range(num_workers)]\n        self._locks: list[threading.Lock] = [threading.Lock() for _ in range(num_workers)]\n\n\
+  \    def submit(self, worker_id: int, task: Any) -> None:\n        if not (0 <= worker_id < self.num_workers):\n       \
+  \     raise IndexError(\"worker_id out of range\")\n        with self._locks[worker_id]:\n            self._queues[worker_id].append(task)\
+  \  # append to bottom\n\n    def worker_pop(self, worker_id: int) -> Any | None:\n        if not (0 <= worker_id < self.num_workers):\n\
+  \            raise IndexError(\"worker_id out of range\")\n\n        # Try popping from bottom (LIFO)\n        with self._locks[worker_id]:\n\
+  \            if self._queues[worker_id]:\n                return self._queues[worker_id].pop()\n\n        # If empty, attempt\
+  \ to steal from others\n        return self.steal_any(worker_id)\n\n    def steal(self, victim_id: int) -> Any | None:\n\
+  \        if not (0 <= victim_id < self.num_workers):\n            raise IndexError(\"victim_id out of range\")\n\n     \
+  \   with self._locks[victim_id]:\n            if self._queues[victim_id]:\n                return self._queues[victim_id].popleft()\
+  \  # steal from top (FIFO)\n        return None\n\n    def steal_any(self, thief_id: int) -> Any | None:\n        for offset\
+  \ in range(1, self.num_workers):\n            victim = (thief_id + offset) % self.num_workers\n            stolen = self.steal(victim)\n\
+  \            if stolen is not None:\n                return stolen\n        return None\n\n    def execute_all(self) ->\
+  \ list[tuple[int, Any]]:\n        executed: list[tuple[int, Any]] = []\n        active = True\n        while active:\n \
+  \           active = False\n            for wid in range(self.num_workers):\n                task = self.worker_pop(wid)\n\
+  \                if task is not None:\n                    executed.append((wid, task))\n                    active = True\n\
+  \        return executed\n"
+visible_tests: "def test_lifo_local_worker_order():\n    pool = WorkStealingPool(num_workers=2)\n    pool.submit(0, \"task1\"\
+  )\n    pool.submit(0, \"task2\")\n    pool.submit(0, \"task3\")\n\n    # Worker 0 should pop in LIFO order\n    assert pool.worker_pop(0)\
+  \ == \"task3\"\n    assert pool.worker_pop(0) == \"task2\"\n    assert pool.worker_pop(0) == \"task1\"\n\n\ndef test_fifo_work_stealing():\n\
+  \    pool = WorkStealingPool(num_workers=2)\n    pool.submit(0, \"first\")\n    pool.submit(0, \"second\")\n\n    # Worker\
+  \ 1 steals from Worker 0 in FIFO order\n    assert pool.steal(0) == \"first\"\n    # Worker 0 gets remaining task\n    assert\
+  \ pool.worker_pop(0) == \"second\"\n"
+hidden_tests: "def test_steal_any_round_robin():\n    pool = WorkStealingPool(num_workers=4)\n    pool.submit(2, \"work_item\"\
+  )\n\n    # Worker 0 steals from Worker 2\n    task = pool.steal_any(0)\n    assert task == \"work_item\"\n    assert pool.steal_any(0)\
+  \ is None\n\n\ndef test_execute_all_drains_everything():\n    pool = WorkStealingPool(num_workers=3)\n    pool.submit(0,\
+  \ 100)\n    pool.submit(0, 101)\n    pool.submit(1, 200)\n\n    results = pool.execute_all()\n    tasks = [t for _, t in\
+  \ results]\n    assert sorted(tasks) == [100, 101, 200]\n\n\ndef test_single_worker_pool():\n    pool = WorkStealingPool(num_workers=1)\n\
+  \    pool.submit(0, \"a\")\n    pool.submit(0, \"b\")\n    assert pool.steal(0) == \"a\"\n    assert pool.worker_pop(0)\
+  \ == \"b\"\n    assert pool.worker_pop(0) is None\n\n\ndef test_empty_steal_returns_none():\n    pool = WorkStealingPool(num_workers=2)\n\
+  \    assert pool.steal(0) is None\n    assert pool.steal_any(1) is None\n    assert pool.worker_pop(0) is None\n\n\ndef\
+  \ test_concurrent_stealing_threads():\n    import concurrent.futures\n    pool = WorkStealingPool(num_workers=4)\n    for\
+  \ i in range(200):\n        pool.submit(0, i)\n\n    stolen_tasks = []\n\n    def thief(tid: int):\n        local = []\n\
+  \        while True:\n            t = pool.worker_pop(tid)\n            if t is None:\n                break\n         \
+  \   local.append(t)\n        return local\n\n    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:\n    \
+  \    futures = [ex.submit(thief, i) for i in range(4)]\n        for f in concurrent.futures.as_completed(futures):\n   \
+  \         stolen_tasks.extend(f.result())\n\n    assert len(stolen_tasks) == 200\n    assert sorted(stolen_tasks) == list(range(200))\n\
+  \n\ndef test_invalid_worker_id_raises():\n    import pytest\n    pool = WorkStealingPool(num_workers=2)\n    with pytest.raises(IndexError):\n\
+  \        pool.submit(2, \"invalid\")\n    with pytest.raises(IndexError):\n        pool.worker_pop(5)\n"

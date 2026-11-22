@@ -1,0 +1,97 @@
+task_id: EF-CPP-010
+title: Zero-Copy Circular Byte Buffer with std::span
+language: cpp
+difficulty: medium
+category: systems
+tags:
+- zero-copy
+- span
+- ring-buffer
+- streaming
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Zero-Copy Circular Byte Buffer with std::span\n\nImplement a zero-copy circular ring buffer in C++20 for raw byte\
+  \ streaming that returns memory slices as `std::span` views to facilitate zero-copy socket or I/O writes.\n\n## Requirements\n\
+  \nImplement the class `CircularByteBuffer`:\n\n- `explicit CircularByteBuffer(size_t capacity)`:\n  Initializes contiguous\
+  \ byte buffer of `capacity` bytes.\n- `std::pair<std::span<uint8_t>, std::span<uint8_t>> prepare_write()`:\n  Returns up\
+  \ to two contiguous mutable byte spans available for writing.\n  If available write space does not wrap around, the second\
+  \ span is empty.\n- `void commit_write(size_t bytes)`:\n  Advances write offset by `bytes` (where `bytes <= available_write()`).\n\
+  - `std::pair<std::span<const uint8_t>, std::span<const uint8_t>> prepare_read() const`:\n  Returns up to two contiguous\
+  \ const byte spans containing buffered unread data.\n- `void commit_read(size_t bytes)`:\n  Advances read offset by `bytes`\
+  \ (where `bytes <= available_read()`).\n- `[[nodiscard]] size_t available_read() const noexcept`:\n  Returns number of unread\
+  \ bytes.\n- `[[nodiscard]] size_t available_write() const noexcept`:\n  Returns remaining write capacity.\n- `[[nodiscard]]\
+  \ size_t capacity() const noexcept`:\n  Returns total capacity.\n"
+starter_code: "#pragma once\n#include <cstddef>\n#include <cstdint>\n#include <span>\n#include <utility>\n\nclass CircularByteBuffer\
+  \ {\npublic:\n    explicit CircularByteBuffer(size_t capacity);\n    ~CircularByteBuffer();\n\n    std::pair<std::span<uint8_t>,\
+  \ std::span<uint8_t>> prepare_write();\n    void commit_write(size_t bytes);\n\n    std::pair<std::span<const uint8_t>,\
+  \ std::span<const uint8_t>> prepare_read() const;\n    void commit_read(size_t bytes);\n\n    [[nodiscard]] size_t available_read()\
+  \ const noexcept;\n    [[nodiscard]] size_t available_write() const noexcept;\n    [[nodiscard]] size_t capacity() const\
+  \ noexcept;\n};\n"
+canonical_solution: "#pragma once\n#include <algorithm>\n#include <cstddef>\n#include <cstdint>\n#include <span>\n#include\
+  \ <stdexcept>\n#include <utility>\n\nclass CircularByteBuffer {\npublic:\n    explicit CircularByteBuffer(size_t capacity)\n\
+  \        : capacity_(capacity), read_idx_(0), write_idx_(0), size_(0) {\n        if (capacity == 0) {\n            throw\
+  \ std::invalid_argument(\"Capacity must be at least 1\");\n        }\n        buffer_ = new uint8_t[capacity];\n    }\n\n\
+  \    ~CircularByteBuffer() {\n        delete[] buffer_;\n    }\n\n    CircularByteBuffer(const CircularByteBuffer&) = delete;\n\
+  \    CircularByteBuffer& operator=(const CircularByteBuffer&) = delete;\n\n    CircularByteBuffer(CircularByteBuffer&& other)\
+  \ noexcept\n        : buffer_(other.buffer_),\n          capacity_(other.capacity_),\n          read_idx_(other.read_idx_),\n\
+  \          write_idx_(other.write_idx_),\n          size_(other.size_) {\n        other.buffer_ = nullptr;\n        other.capacity_\
+  \ = 0;\n        other.size_ = 0;\n    }\n\n    CircularByteBuffer& operator=(CircularByteBuffer&& other) noexcept {\n  \
+  \      if (this != &other) {\n            delete[] buffer_;\n            buffer_ = other.buffer_;\n            capacity_\
+  \ = other.capacity_;\n            read_idx_ = other.read_idx_;\n            write_idx_ = other.write_idx_;\n           \
+  \ size_ = other.size_;\n            other.buffer_ = nullptr;\n            other.capacity_ = 0;\n            other.size_\
+  \ = 0;\n        }\n        return *this;\n    }\n\n    std::pair<std::span<uint8_t>, std::span<uint8_t>> prepare_write()\
+  \ {\n        size_t free_space = capacity_ - size_;\n        if (free_space == 0) {\n            return {{}, {}};\n    \
+  \    }\n\n        if (write_idx_ >= read_idx_ && size_ < capacity_) {\n            size_t tail_space = capacity_ - write_idx_;\n\
+  \            if (read_idx_ > 0) {\n                return {std::span<uint8_t>(buffer_ + write_idx_, tail_space),\n     \
+  \                   std::span<uint8_t>(buffer_, read_idx_)};\n            }\n            return {std::span<uint8_t>(buffer_\
+  \ + write_idx_, tail_space), {}};\n        }\n\n        return {std::span<uint8_t>(buffer_ + write_idx_, read_idx_ - write_idx_),\
+  \ {}};\n    }\n\n    void commit_write(size_t bytes) {\n        if (bytes > (capacity_ - size_)) {\n            throw std::overflow_error(\"\
+  Cannot commit more than available write capacity\");\n        }\n        write_idx_ = (write_idx_ + bytes) % capacity_;\n\
+  \        size_ += bytes;\n    }\n\n    std::pair<std::span<const uint8_t>, std::span<const uint8_t>> prepare_read() const\
+  \ {\n        if (size_ == 0) {\n            return {{}, {}};\n        }\n\n        if (write_idx_ <= read_idx_) {\n    \
+  \        size_t tail_data = capacity_ - read_idx_;\n            if (write_idx_ > 0) {\n                return {std::span<const\
+  \ uint8_t>(buffer_ + read_idx_, tail_data),\n                        std::span<const uint8_t>(buffer_, write_idx_)};\n \
+  \           }\n            return {std::span<const uint8_t>(buffer_ + read_idx_, tail_data), {}};\n        }\n\n       \
+  \ return {std::span<const uint8_t>(buffer_ + read_idx_, size_), {}};\n    }\n\n    void commit_read(size_t bytes) {\n  \
+  \      if (bytes > size_) {\n            throw std::underflow_error(\"Cannot commit more than available unread bytes\");\n\
+  \        }\n        read_idx_ = (read_idx_ + bytes) % capacity_;\n        size_ -= bytes;\n    }\n\n    [[nodiscard]] size_t\
+  \ available_read() const noexcept {\n        return size_;\n    }\n\n    [[nodiscard]] size_t available_write() const noexcept\
+  \ {\n        return capacity_ - size_;\n    }\n\n    [[nodiscard]] size_t capacity() const noexcept {\n        return capacity_;\n\
+  \    }\n\nprivate:\n    uint8_t* buffer_{nullptr};\n    size_t capacity_{0};\n    size_t read_idx_{0};\n    size_t write_idx_{0};\n\
+  \    size_t size_{0};\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#include <cstring>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(CircularByteBufferTest, BasicWriteAndRead)\
+  \ {\n    CircularByteBuffer buf(16);\n    EXPECT_EQ(buf.available_read(), 0);\n    EXPECT_EQ(buf.available_write(), 16);\n\
+  \n    auto [w1, w2] = buf.prepare_write();\n    ASSERT_GE(w1.size(), 5);\n    std::memcpy(w1.data(), \"Hello\", 5);\n  \
+  \  buf.commit_write(5);\n\n    EXPECT_EQ(buf.available_read(), 5);\n\n    auto [r1, r2] = buf.prepare_read();\n    EXPECT_EQ(r1.size(),\
+  \ 5);\n    EXPECT_TRUE(r2.empty());\n    EXPECT_EQ(std::memcmp(r1.data(), \"Hello\", 5), 0);\n\n    buf.commit_read(5);\n\
+  \    EXPECT_EQ(buf.available_read(), 0);\n}\n\nTEST(CircularByteBufferTest, CapacityLimits) {\n    CircularByteBuffer buf(8);\n\
+  \    auto [w1, w2] = buf.prepare_write();\n    buf.commit_write(8);\n    EXPECT_EQ(buf.available_write(), 0);\n    EXPECT_THROW(buf.commit_write(1),\
+  \ std::overflow_error);\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <cstring>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(CircularByteBufferTest, WrapAroundTwoSpanWrite)\
+  \ {\n    CircularByteBuffer buf(10);\n    // Write 7 bytes, read 5 bytes -> write_idx is 7, read_idx is 5\n    auto [w1,\
+  \ _] = buf.prepare_write();\n    buf.commit_write(7);\n    buf.commit_read(5);\n\n    // Available write = 10 - 2 = 8 bytes:\
+  \ 3 bytes at end [7..10), 5 bytes at start [0..5)\n    auto [sw1, sw2] = buf.prepare_write();\n    EXPECT_EQ(sw1.size(),\
+  \ 3);\n    EXPECT_EQ(sw2.size(), 5);\n}\n\nTEST(CircularByteBufferTest, WrapAroundTwoSpanRead) {\n    CircularByteBuffer\
+  \ buf(10);\n    buf.commit_write(7);\n    buf.commit_read(5);\n    // Now write 6 bytes, wrapping around\n    buf.commit_write(6);\n\
+  \    // Unread data = 2 + 6 = 8 bytes: 3 bytes at end [7..10), 5 bytes at start [0..5)\n    auto [r1, r2] = buf.prepare_read();\n\
+  \    EXPECT_EQ(r1.size(), 3);\n    EXPECT_EQ(r2.size(), 5);\n    buf.commit_read(8);\n    EXPECT_EQ(buf.available_read(),\
+  \ 0);\n}\n\nTEST(CircularByteBufferTest, EmptyReadCommitThrows) {\n    CircularByteBuffer buf(10);\n    EXPECT_THROW(buf.commit_read(1),\
+  \ std::underflow_error);\n}\n\nTEST(CircularByteBufferTest, ZeroCapacityThrows) {\n    EXPECT_THROW(CircularByteBuffer(0),\
+  \ std::invalid_argument);\n}\n\nTEST(CircularByteBufferTest, FullBufferPrepareWriteEmpty) {\n    CircularByteBuffer buf(4);\n\
+  \    buf.commit_write(4);\n    auto [w1, w2] = buf.prepare_write();\n    EXPECT_TRUE(w1.empty());\n    EXPECT_TRUE(w2.empty());\n\
+  }\n\nTEST(CircularByteBufferTest, StreamThroughputSimulation) {\n    CircularByteBuffer buf(32);\n    for (int i = 0; i\
+  \ < 500; ++i) {\n        auto [w1, w2] = buf.prepare_write();\n        ASSERT_GE(w1.size(), 4);\n        uint32_t val =\
+  \ static_cast<uint32_t>(i);\n        std::memcpy(w1.data(), &val, sizeof(val));\n        buf.commit_write(4);\n\n      \
+  \  auto [r1, r2] = buf.prepare_read();\n        ASSERT_GE(r1.size(), 4);\n        uint32_t read_val = 0;\n        std::memcpy(&read_val,\
+  \ r1.data(), sizeof(read_val));\n        EXPECT_EQ(read_val, val);\n        buf.commit_read(4);\n    }\n}\n"

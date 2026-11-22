@@ -1,0 +1,86 @@
+task_id: EF-CPP-008
+title: Custom Polymorphic Memory Resource (std::pmr) Monotonic Allocator
+language: cpp
+difficulty: medium
+category: systems
+tags:
+- pmr
+- memory_resource
+- allocator
+- cpp20
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Custom Polymorphic Memory Resource (std::pmr) Monotonic Allocator\n\nImplement a custom `std::pmr::memory_resource`\
+  \ in C++20 that allocates memory from a fixed preallocated contiguous buffer, delegates to an upstream resource on exhaustion,\
+  \ and performs fast $O(1)$ release.\n\n## Requirements\n\nImplement the class `MonotonicBufferResource` inheriting from\
+  \ `std::pmr::memory_resource`:\n\n- `MonotonicBufferResource(void* buffer, size_t size, std::pmr::memory_resource* upstream\
+  \ = std::pmr::get_default_resource())`:\n  Uses caller-provided contiguous buffer.\n- `void* do_allocate(size_t bytes, size_t\
+  \ alignment) override`:\n  Allocates aligned memory from initial buffer. If insufficient space, delegates allocation to\
+  \ `upstream`.\n- `void do_deallocate(void* p, size_t bytes, size_t alignment) override`:\n  No-op for buffer allocations\
+  \ (monotonic). If `p` was allocated by `upstream`, deallocates via upstream.\n- `bool do_is_equal(const std::pmr::memory_resource&\
+  \ other) const noexcept override`:\n  Returns `this == &other`.\n- `[[nodiscard]] size_t bytes_allocated() const noexcept`:\n\
+  \  Returns total bytes allocated out of the initial buffer.\n- `void release() noexcept`:\n  Resets buffer allocation offset\
+  \ back to 0.\n"
+starter_code: "#pragma once\n#include <cstddef>\n#include <memory_resource>\n\nclass MonotonicBufferResource : public std::pmr::memory_resource\
+  \ {\npublic:\n    MonotonicBufferResource(void* buffer, size_t size,\n                            std::pmr::memory_resource*\
+  \ upstream = std::pmr::get_default_resource());\n\n    size_t bytes_allocated() const noexcept;\n    void release() noexcept;\n\
+  \nprotected:\n    void* do_allocate(size_t bytes, size_t alignment) override;\n    void do_deallocate(void* p, size_t bytes,\
+  \ size_t alignment) override;\n    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override;\n};\n"
+canonical_solution: "#pragma once\n#include <cstddef>\n#include <cstdint>\n#include <memory_resource>\n#include <vector>\n\
+  \nclass MonotonicBufferResource : public std::pmr::memory_resource {\npublic:\n    MonotonicBufferResource(void* buffer,\
+  \ size_t size,\n                            std::pmr::memory_resource* upstream = std::pmr::get_default_resource())\n  \
+  \      : buffer_(static_cast<std::byte*>(buffer)),\n          capacity_(size),\n          offset_(0),\n          upstream_(upstream\
+  \ ? upstream : std::pmr::get_default_resource()) {}\n\n    ~MonotonicBufferResource() override {\n        // Free any active\
+  \ upstream allocations\n        for (const auto& alloc : upstream_allocs_) {\n            upstream_->deallocate(alloc.ptr,\
+  \ alloc.bytes, alloc.alignment);\n        }\n    }\n\n    [[nodiscard]] size_t bytes_allocated() const noexcept {\n    \
+  \    return offset_;\n    }\n\n    void release() noexcept {\n        offset_ = 0;\n        for (const auto& alloc : upstream_allocs_)\
+  \ {\n            upstream_->deallocate(alloc.ptr, alloc.bytes, alloc.alignment);\n        }\n        upstream_allocs_.clear();\n\
+  \    }\n\nprotected:\n    void* do_allocate(size_t bytes, size_t alignment) override {\n        if (bytes == 0) return nullptr;\n\
+  \n        uintptr_t curr = reinterpret_cast<uintptr_t>(buffer_ + offset_);\n        uintptr_t aligned = (curr + (alignment\
+  \ - 1)) & ~(alignment - 1);\n        size_t padding = aligned - curr;\n\n        if (offset_ + padding + bytes <= capacity_)\
+  \ {\n            offset_ += padding + bytes;\n            return reinterpret_cast<void*>(aligned);\n        }\n\n      \
+  \  // Delegate overflow to upstream resource\n        void* p = upstream_->allocate(bytes, alignment);\n        upstream_allocs_.push_back({p,\
+  \ bytes, alignment});\n        return p;\n    }\n\n    void do_deallocate(void* p, size_t bytes, size_t alignment) override\
+  \ {\n        if (p == nullptr) return;\n        uintptr_t addr = reinterpret_cast<uintptr_t>(p);\n        uintptr_t buf_start\
+  \ = reinterpret_cast<uintptr_t>(buffer_);\n        uintptr_t buf_end = buf_start + capacity_;\n\n        if (addr >= buf_start\
+  \ && addr < buf_end) {\n            // Monotonic: deallocation from initial buffer is a no-op\n            return;\n   \
+  \     }\n\n        // Deallocate upstream\n        for (auto it = upstream_allocs_.begin(); it != upstream_allocs_.end();\
+  \ ++it) {\n            if (it->ptr == p) {\n                upstream_->deallocate(p, bytes, alignment);\n              \
+  \  upstream_allocs_.erase(it);\n                return;\n            }\n        }\n    }\n\n    bool do_is_equal(const std::pmr::memory_resource&\
+  \ other) const noexcept override {\n        return this == &other;\n    }\n\nprivate:\n    struct UpstreamAlloc {\n    \
+  \    void* ptr;\n        size_t bytes;\n        size_t alignment;\n    };\n\n    std::byte* buffer_;\n    size_t capacity_;\n\
+  \    size_t offset_;\n    std::pmr::memory_resource* upstream_;\n    std::vector<UpstreamAlloc> upstream_allocs_;\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(PmrMonotonicResourceTest, VectorAllocation)\
+  \ {\n    alignas(64) std::byte raw_buffer[1024];\n    MonotonicBufferResource mr(raw_buffer, sizeof(raw_buffer));\n\n  \
+  \  std::pmr::vector<int> vec(&mr);\n    for (int i = 0; i < 50; ++i) {\n        vec.push_back(i);\n    }\n    EXPECT_GT(mr.bytes_allocated(),\
+  \ 0);\n    EXPECT_EQ(vec.size(), 50);\n}\n\nTEST(PmrMonotonicResourceTest, AlignmentRespects64) {\n    alignas(64) std::byte\
+  \ raw_buffer[512];\n    MonotonicBufferResource mr(raw_buffer, sizeof(raw_buffer));\n\n    void* p = mr.allocate(32, 64);\n\
+  \    EXPECT_NE(p, nullptr);\n    EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % 64, 0);\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <string>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\
+  \n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(PmrMonotonicResourceTest, UpstreamFallbackOnOverflow)\
+  \ {\n    alignas(16) std::byte small_buf[32];\n    MonotonicBufferResource mr(small_buf, sizeof(small_buf));\n\n    void*\
+  \ p1 = mr.allocate(24, 8);\n    EXPECT_NE(p1, nullptr);\n\n    // This request exceeds remaining 8 bytes, must fallback\
+  \ to upstream\n    void* p2 = mr.allocate(64, 8);\n    EXPECT_NE(p2, nullptr);\n    mr.deallocate(p2, 64, 8);\n}\n\nTEST(PmrMonotonicResourceTest,\
+  \ ReleaseRecyclesBuffer) {\n    alignas(16) std::byte raw_buf[256];\n    MonotonicBufferResource mr(raw_buf, sizeof(raw_buf));\n\
+  \n    void* p1 = mr.allocate(128);\n    EXPECT_NE(p1, nullptr);\n    EXPECT_GT(mr.bytes_allocated(), 0);\n\n    mr.release();\n\
+  \    EXPECT_EQ(mr.bytes_allocated(), 0);\n\n    void* p2 = mr.allocate(128);\n    EXPECT_NE(p2, nullptr);\n}\n\nTEST(PmrMonotonicResourceTest,\
+  \ EqualityComparison) {\n    alignas(16) std::byte b1[64], b2[64];\n    MonotonicBufferResource mr1(b1, sizeof(b1));\n \
+  \   MonotonicBufferResource mr2(b2, sizeof(b2));\n\n    EXPECT_TRUE(mr1.is_equal(mr1));\n    EXPECT_FALSE(mr1.is_equal(mr2));\n\
+  }\n\nTEST(PmrMonotonicResourceTest, PmrStringVectorIntegration) {\n    alignas(64) std::byte buf[2048];\n    MonotonicBufferResource\
+  \ mr(buf, sizeof(buf));\n\n    std::pmr::vector<std::pmr::string> words(&mr);\n    words.emplace_back(\"Alpha\", &mr);\n\
+  \    words.emplace_back(\"Beta\", &mr);\n    words.emplace_back(\"Gamma\", &mr);\n\n    EXPECT_EQ(words.size(), 3);\n  \
+  \  EXPECT_EQ(words[0], \"Alpha\");\n}\n\nTEST(PmrMonotonicResourceTest, ZeroBytesAllocation) {\n    alignas(16) std::byte\
+  \ buf[64];\n    MonotonicBufferResource mr(buf, sizeof(buf));\n    EXPECT_EQ(mr.allocate(0), nullptr);\n}\n\nTEST(PmrMonotonicResourceTest,\
+  \ MultipleSequentialAllocations) {\n    alignas(16) std::byte buf[1024];\n    MonotonicBufferResource mr(buf, sizeof(buf));\n\
+  \    for (int i = 0; i < 20; ++i) {\n        void* p = mr.allocate(16, 8);\n        EXPECT_NE(p, nullptr);\n    }\n    EXPECT_LE(mr.bytes_allocated(),\
+  \ 1024);\n}\n"

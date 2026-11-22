@@ -1,0 +1,88 @@
+task_id: EF-CPP-004
+title: Thread-Safe Connection Pool with RAII Leased Guard
+language: cpp
+difficulty: hard
+category: concurrency
+tags:
+- raii
+- connection-pool
+- concurrency
+- thread-safety
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - system
+  - fork
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Thread-Safe Connection Pool with RAII Leased Guard\n\nImplement a thread-safe connection pool in C++20 with an\
+  \ RAII `Lease` guard that automatically returns borrowed connections to the pool upon destruction or scope exit.\n\n## Requirements\n\
+  \n### `MockConnection`\n- `explicit MockConnection(int id)`\n- `[[nodiscard]] int id() const noexcept`\n- `[[nodiscard]]\
+  \ bool is_valid() const noexcept`\n\n### `ConnectionPool`\n- `ConnectionPool(size_t pool_size, std::chrono::milliseconds\
+  \ timeout)`:\n  Preallocates `pool_size` connections with IDs `0` through `pool_size - 1`.\n- `Lease acquire()`:\n  Blocks\
+  \ waiting for an available connection up to `timeout`.\n  Throws `std::runtime_error(\"Pool acquisition timeout\")` if timeout\
+  \ expires before a connection is leased.\n- `[[nodiscard]] size_t available_count() const noexcept`:\n  Returns number of\
+  \ idle connections currently in the pool.\n- `[[nodiscard]] size_t capacity() const noexcept`:\n  Returns total connection\
+  \ pool size.\n\n### `ConnectionPool::Lease` (RAII Guard)\n- Move-only RAII guard wrapping borrowed `MockConnection*`.\n\
+  - When destructed, automatically releases connection back to the parent pool.\n- `MockConnection* operator->()`\n- `MockConnection&\
+  \ operator*()`\n"
+starter_code: "#pragma once\n#include <chrono>\n#include <memory>\n#include <stdexcept>\n\nclass MockConnection {\npublic:\n\
+  \    explicit MockConnection(int id) : id_(id) {}\n    int id() const noexcept { return id_; }\n    bool is_valid() const\
+  \ noexcept { return true; }\nprivate:\n    int id_;\n};\n\nclass ConnectionPool {\npublic:\n    class Lease;\n\n    ConnectionPool(size_t\
+  \ pool_size, std::chrono::milliseconds timeout);\n    ~ConnectionPool();\n\n    Lease acquire();\n    size_t available_count()\
+  \ const noexcept;\n    size_t capacity() const noexcept;\n};\n"
+canonical_solution: "#pragma once\n#include <chrono>\n#include <condition_variable>\n#include <memory>\n#include <mutex>\n\
+  #include <stdexcept>\n#include <vector>\n\nclass MockConnection {\npublic:\n    explicit MockConnection(int id) : id_(id)\
+  \ {}\n    [[nodiscard]] int id() const noexcept { return id_; }\n    [[nodiscard]] bool is_valid() const noexcept { return\
+  \ true; }\nprivate:\n    int id_;\n};\n\nclass ConnectionPool {\npublic:\n    class Lease {\n    public:\n        Lease()\
+  \ : pool_(nullptr), conn_(nullptr) {}\n\n        Lease(ConnectionPool* pool, MockConnection* conn)\n            : pool_(pool),\
+  \ conn_(conn) {}\n\n        ~Lease() {\n            release();\n        }\n\n        Lease(const Lease&) = delete;\n   \
+  \     Lease& operator=(const Lease&) = delete;\n\n        Lease(Lease&& other) noexcept\n            : pool_(other.pool_),\
+  \ conn_(other.conn_) {\n            other.pool_ = nullptr;\n            other.conn_ = nullptr;\n        }\n\n        Lease&\
+  \ operator=(Lease&& other) noexcept {\n            if (this != &other) {\n                release();\n                pool_\
+  \ = other.pool_;\n                conn_ = other.conn_;\n                other.pool_ = nullptr;\n                other.conn_\
+  \ = nullptr;\n            }\n            return *this;\n        }\n\n        MockConnection* operator->() const noexcept\
+  \ { return conn_; }\n        MockConnection& operator*() const noexcept { return *conn_; }\n        MockConnection* get()\
+  \ const noexcept { return conn_; }\n        explicit operator bool() const noexcept { return conn_ != nullptr; }\n\n   \
+  \ private:\n        void release() {\n            if (pool_ && conn_) {\n                pool_->return_connection(conn_);\n\
+  \                pool_ = nullptr;\n                conn_ = nullptr;\n            }\n        }\n\n        ConnectionPool*\
+  \ pool_{nullptr};\n        MockConnection* conn_{nullptr};\n    };\n\n    ConnectionPool(size_t pool_size, std::chrono::milliseconds\
+  \ timeout)\n        : capacity_(pool_size), timeout_(timeout) {\n        if (pool_size == 0) {\n            throw std::invalid_argument(\"\
+  pool_size must be >= 1\");\n        }\n        for (size_t i = 0; i < pool_size; ++i) {\n            connections_.push_back(std::make_unique<MockConnection>(static_cast<int>(i)));\n\
+  \            available_.push_back(connections_.back().get());\n        }\n    }\n\n    ~ConnectionPool() = default;\n\n\
+  \    Lease acquire() {\n        std::unique_lock<std::mutex> lock(mutex_);\n        if (!cv_.wait_for(lock, timeout_, [this]()\
+  \ { return !available_.empty(); })) {\n            throw std::runtime_error(\"Pool acquisition timeout\");\n        }\n\
+  \        MockConnection* conn = available_.back();\n        available_.pop_back();\n        return Lease(this, conn);\n\
+  \    }\n\n    [[nodiscard]] size_t available_count() const noexcept {\n        std::lock_guard<std::mutex> lock(mutex_);\n\
+  \        return available_.size();\n    }\n\n    [[nodiscard]] size_t capacity() const noexcept {\n        return capacity_;\n\
+  \    }\n\nprivate:\n    void return_connection(MockConnection* conn) {\n        std::lock_guard<std::mutex> lock(mutex_);\n\
+  \        available_.push_back(conn);\n        cv_.notify_one();\n    }\n\n    size_t capacity_;\n    std::chrono::milliseconds\
+  \ timeout_;\n    mutable std::mutex mutex_;\n    std::condition_variable cv_;\n    std::vector<std::unique_ptr<MockConnection>>\
+  \ connections_;\n    std::vector<MockConnection*> available_;\n};\n"
+visible_tests: "#include <gtest/gtest.h>\n#if __has_include(\"solution.hpp\")\n#include \"solution.hpp\"\n#elif __has_include(\"\
+  solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(ConnectionPoolTest, BasicAcquireAndRelease) {\n    ConnectionPool\
+  \ pool(2, std::chrono::milliseconds(500));\n    EXPECT_EQ(pool.available_count(), 2);\n\n    {\n        auto lease = pool.acquire();\n\
+  \        EXPECT_EQ(pool.available_count(), 1);\n        EXPECT_TRUE(lease->is_valid());\n    } // Lease goes out of scope,\
+  \ returning connection\n\n    EXPECT_EQ(pool.available_count(), 2);\n}\n\nTEST(ConnectionPoolTest, ExhaustionAndTimeout)\
+  \ {\n    ConnectionPool pool(1, std::chrono::milliseconds(50));\n    auto lease1 = pool.acquire();\n    EXPECT_EQ(pool.available_count(),\
+  \ 0);\n\n    // Second acquire should timeout and throw\n    EXPECT_THROW(pool.acquire(), std::runtime_error);\n}\n"
+hidden_tests: "#include <gtest/gtest.h>\n#include <thread>\n#include <vector>\n#if __has_include(\"solution.hpp\")\n#include\
+  \ \"solution.hpp\"\n#elif __has_include(\"solution.cpp\")\n#include \"solution.cpp\"\n#endif\n\nTEST(ConnectionPoolTest,\
+  \ MoveSemanticsOfLease) {\n    ConnectionPool pool(2, std::chrono::milliseconds(200));\n    auto lease1 = pool.acquire();\n\
+  \    EXPECT_EQ(pool.available_count(), 1);\n\n    auto lease2 = std::move(lease1);\n    EXPECT_EQ(pool.available_count(),\
+  \ 1);\n    EXPECT_TRUE(lease2->is_valid());\n}\n\nTEST(ConnectionPoolTest, MultiThreadedContention) {\n    constexpr size_t\
+  \ PoolSize = 4;\n    ConnectionPool pool(PoolSize, std::chrono::milliseconds(1000));\n    std::vector<std::thread> workers;\n\
+  \n    for (int i = 0; i < 16; ++i) {\n        workers.emplace_back([&pool]() {\n            for (int j = 0; j < 20; ++j)\
+  \ {\n                auto lease = pool.acquire();\n                EXPECT_TRUE(lease->is_valid());\n                std::this_thread::sleep_for(std::chrono::milliseconds(1));\n\
+  \            }\n        });\n    }\n\n    for (auto& w : workers) {\n        w.join();\n    }\n\n    EXPECT_EQ(pool.available_count(),\
+  \ PoolSize);\n}\n\nTEST(ConnectionPoolTest, ZeroPoolSizeThrows) {\n    EXPECT_THROW(ConnectionPool(0, std::chrono::milliseconds(100)),\
+  \ std::invalid_argument);\n}\n\nTEST(ConnectionPoolTest, PointerAndDereferenceOperators) {\n    ConnectionPool pool(1, std::chrono::milliseconds(100));\n\
+  \    auto lease = pool.acquire();\n    EXPECT_EQ((*lease).id(), 0);\n    EXPECT_EQ(lease->id(), 0);\n}\n\nTEST(ConnectionPoolTest,\
+  \ FullCapacityDrainAndRefill) {\n    ConnectionPool pool(5, std::chrono::milliseconds(100));\n    std::vector<ConnectionPool::Lease>\
+  \ leases;\n    for (int i = 0; i < 5; ++i) {\n        leases.push_back(pool.acquire());\n    }\n    EXPECT_EQ(pool.available_count(),\
+  \ 0);\n    leases.clear(); // Return all\n    EXPECT_EQ(pool.available_count(), 5);\n}\n\nTEST(ConnectionPoolTest, CapacityCheck)\
+  \ {\n    ConnectionPool pool(10, std::chrono::milliseconds(100));\n    EXPECT_EQ(pool.capacity(), 10);\n}\n"

@@ -1,0 +1,84 @@
+task_id: EF-PY-013
+title: Bellman-Ford Shortest Path with Negative Cycle Detection
+language: python
+difficulty: medium
+category: algorithmic
+tags:
+- graph
+- shortest-path
+- bellman-ford
+- cycle-detection
+- algorithms
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Bellman-Ford Shortest Path with Negative Cycle Detection\n\nImplement the Bellman-Ford algorithm on directed weighted\
+  \ graphs supporting arbitrary real-valued weights, detecting reachable negative-weight cycles, and reconstructing negative\
+  \ cycle paths.\n\n## Requirements\n\nImplement the class `BellmanFordGraph`:\n\n- `__init__(self, vertices: list[Any] |\
+  \ None = None)`:\n  Initializes graph with optional vertex list.\n- `add_edge(self, u: Any, v: Any, weight: float) -> None`:\n\
+  \  Adds a directed edge from `u` to `v` with given real weight. Adds vertices if not already present.\n- `shortest_paths(self,\
+  \ source: Any) -> tuple[dict[Any, float], dict[Any, list[Any]]]`:\n  Computes shortest paths from `source` to all reachable\
+  \ vertices.\n  Returns `(distances, paths)` where:\n  - `distances`: mapping from vertex to minimum distance (`float('inf')`\
+  \ if unreachable).\n  - `paths`: mapping from vertex to the ordered list of vertices along the shortest path from `source`\
+  \ to that vertex (empty list for unreachable vertices, `[source]` for source itself).\n  - If a negative-weight cycle is\
+  \ reachable from `source`, raises `ValueError(\"Negative weight cycle detected\")`.\n- `find_negative_cycle(self) -> list[Any]\
+  \ | None`:\n  Finds any negative-weight cycle present anywhere in the graph.\n  Returns the cycle as a list of vertices\
+  \ `[v1, v2, ..., vk, v1]` where the first and last vertex match, or `None` if no negative cycle exists.\n"
+starter_code: "from typing import Any\n\n\nclass BellmanFordGraph:\n    def __init__(self, vertices: list[Any] | None = None)\
+  \ -> None:\n        \"\"\"Initialize graph.\"\"\"\n        pass\n\n    def add_edge(self, u: Any, v: Any, weight: float)\
+  \ -> None:\n        \"\"\"Add directed weighted edge.\"\"\"\n        pass\n\n    def shortest_paths(self, source: Any) ->\
+  \ tuple[dict[Any, float], dict[Any, list[Any]]]:\n        \"\"\"Compute shortest paths or raise ValueError if negative cycle\
+  \ reachable.\"\"\"\n        pass\n\n    def find_negative_cycle(self) -> list[Any] | None:\n        \"\"\"Return vertices\
+  \ of any negative cycle or None.\"\"\"\n        pass\n"
+canonical_solution: "from typing import Any\n\n\nclass BellmanFordGraph:\n    def __init__(self, vertices: list[Any] | None\
+  \ = None) -> None:\n        self.vertices: set[Any] = set(vertices or [])\n        self.edges: list[tuple[Any, Any, float]]\
+  \ = []\n\n    def add_edge(self, u: Any, v: Any, weight: float) -> None:\n        self.vertices.add(u)\n        self.vertices.add(v)\n\
+  \        self.edges.append((u, v, float(weight)))\n\n    def shortest_paths(self, source: Any) -> tuple[dict[Any, float],\
+  \ dict[Any, list[Any]]]:\n        if source not in self.vertices:\n            raise KeyError(f\"Source vertex {source}\
+  \ not in graph\")\n\n        dist: dict[Any, float] = {v: float('inf') for v in self.vertices}\n        pred: dict[Any,\
+  \ Any | None] = {v: None for v in self.vertices}\n        dist[source] = 0.0\n\n        num_v = len(self.vertices)\n   \
+  \     for _ in range(num_v - 1):\n            relaxed = False\n            for u, v, w in self.edges:\n                if\
+  \ dist[u] != float('inf') and dist[u] + w < dist[v]:\n                    dist[v] = dist[u] + w\n                    pred[v]\
+  \ = u\n                    relaxed = True\n            if not relaxed:\n                break\n\n        # Check for negative\
+  \ weight cycles reachable from source\n        for u, v, w in self.edges:\n            if dist[u] != float('inf') and dist[u]\
+  \ + w < dist[v]:\n                raise ValueError(\"Negative weight cycle detected\")\n\n        paths: dict[Any, list[Any]]\
+  \ = {}\n        for target in self.vertices:\n            if dist[target] == float('inf'):\n                paths[target]\
+  \ = []\n            else:\n                path: list[Any] = []\n                curr: Any | None = target\n           \
+  \     while curr is not None:\n                    path.append(curr)\n                    if curr == source:\n         \
+  \               break\n                    curr = pred[curr]\n                path.reverse()\n                paths[target]\
+  \ = path\n\n        return dist, paths\n\n    def find_negative_cycle(self) -> list[Any] | None:\n        dist: dict[Any,\
+  \ float] = {v: 0.0 for v in self.vertices}\n        pred: dict[Any, Any | None] = {v: None for v in self.vertices}\n\n \
+  \       num_v = len(self.vertices)\n        cycle_node: Any | None = None\n\n        for i in range(num_v):\n          \
+  \  cycle_node = None\n            for u, v, w in self.edges:\n                if dist[u] + w < dist[v]:\n              \
+  \      dist[v] = dist[u] + w\n                    pred[v] = u\n                    cycle_node = v\n\n        if cycle_node\
+  \ is None:\n            return None\n\n        # Trace back num_v times to guarantee entering the cycle\n        for _ in\
+  \ range(num_v):\n            cycle_node = pred[cycle_node]\n\n        cycle: list[Any] = []\n        curr = cycle_node\n\
+  \        while True:\n            cycle.append(curr)\n            if len(cycle) > 1 and curr == cycle_node:\n          \
+  \      break\n            curr = pred[curr]\n\n        cycle.reverse()\n        return cycle\n"
+visible_tests: "def test_bellman_ford_simple_dag():\n    g = BellmanFordGraph()\n    g.add_edge(\"A\", \"B\", 4)\n    g.add_edge(\"\
+  A\", \"C\", 2)\n    g.add_edge(\"C\", \"B\", 1)\n    g.add_edge(\"B\", \"D\", 5)\n\n    dist, paths = g.shortest_paths(\"\
+  A\")\n    assert dist[\"A\"] == 0\n    assert dist[\"B\"] == 3\n    assert dist[\"C\"] == 2\n    assert dist[\"D\"] == 8\n\
+  \    assert paths[\"B\"] == [\"A\", \"C\", \"B\"]\n\n\ndef test_bellman_ford_negative_edge_without_cycle():\n    g = BellmanFordGraph()\n\
+  \    g.add_edge(\"S\", \"A\", 3)\n    g.add_edge(\"A\", \"B\", -2)\n    g.add_edge(\"S\", \"B\", 5)\n\n    dist, paths =\
+  \ g.shortest_paths(\"S\")\n    assert dist[\"B\"] == 1\n    assert paths[\"B\"] == [\"S\", \"A\", \"B\"]\n"
+hidden_tests: "import pytest\n\n\ndef test_negative_cycle_reachable_raises_value_error():\n    g = BellmanFordGraph()\n  \
+  \  g.add_edge(\"S\", \"A\", 1)\n    g.add_edge(\"A\", \"B\", 2)\n    g.add_edge(\"B\", \"C\", -6)\n    g.add_edge(\"C\"\
+  , \"A\", 1)\n\n    with pytest.raises(ValueError, match=\"Negative weight cycle detected\"):\n        g.shortest_paths(\"\
+  S\")\n\n\ndef test_find_negative_cycle_vertices():\n    g = BellmanFordGraph()\n    g.add_edge(1, 2, 1)\n    g.add_edge(2,\
+  \ 3, -5)\n    g.add_edge(3, 1, 2)\n\n    cycle = g.find_negative_cycle()\n    assert cycle is not None\n    assert cycle[0]\
+  \ == cycle[-1]\n    assert len(cycle) >= 3\n\n\ndef test_no_negative_cycle_returns_none():\n    g = BellmanFordGraph()\n\
+  \    g.add_edge(\"X\", \"Y\", 10)\n    g.add_edge(\"Y\", \"Z\", 20)\n    assert g.find_negative_cycle() is None\n\n\ndef\
+  \ test_disconnected_vertices():\n    g = BellmanFordGraph()\n    g.add_edge(\"A\", \"B\", 3)\n    g.add_edge(\"C\", \"D\"\
+  , 4)\n\n    dist, paths = g.shortest_paths(\"A\")\n    assert dist[\"A\"] == 0\n    assert dist[\"B\"] == 3\n    assert\
+  \ dist[\"C\"] == float(\"inf\")\n    assert paths[\"C\"] == []\n\n\ndef test_self_loop_negative_edge():\n    g = BellmanFordGraph()\n\
+  \    g.add_edge(\"N\", \"N\", -1.0)\n    with pytest.raises(ValueError):\n        g.shortest_paths(\"N\")\n\n\ndef test_scale_graph():\n\
+  \    g = BellmanFordGraph()\n    n = 100\n    for i in range(n - 1):\n        g.add_edge(i, i + 1, 1.0)\n    dist, paths\
+  \ = g.shortest_paths(0)\n    assert dist[n - 1] == float(n - 1)\n    assert len(paths[n - 1]) == n\n"

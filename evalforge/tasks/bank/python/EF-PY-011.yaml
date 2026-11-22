@@ -1,0 +1,89 @@
+task_id: EF-PY-011
+title: Sliding-Window TCP Packet Reassembly Buffer
+language: python
+difficulty: medium
+category: systems
+tags:
+- networking
+- tcp
+- buffer
+- packet-reassembly
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 22
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Sliding-Window TCP Packet Reassembly Buffer\n\nImplement a TCP packet reassembly buffer that simulates the transport\
+  \ layer's receive window. It handles out-of-order, overlapping, duplicate, and fragmented byte segments.\n\n## Requirements\n\
+  \nImplement the class `PacketReassemblyBuffer`:\n\n- `__init__(self, initial_seq: int = 0, window_size: int = 65535)`:\n\
+  \  Initializes reassembly buffer with the initial expected byte sequence number (`initial_seq >= 0`) and sliding window\
+  \ capacity (`window_size >= 1`).\n- `receive_segment(self, seq: int, data: bytes) -> bytes`:\n  Processes an incoming segment\
+  \ starting at byte sequence number `seq`.\n  - Discards any data falling entirely before `expected_seq` or completely beyond\
+  \ the current window boundary `[expected_seq, expected_seq + window_size)`.\n  - Trims overlapping slices that are already\
+  \ received or buffered.\n  - If the segment fills the contiguous gap starting at `expected_seq`, returns all newly contiguous\
+  \ in-order bytes and advances `expected_seq`.\n  - Otherwise, stores the out-of-order fragment in the buffer and returns\
+  \ `b\"\"`.\n- `expected_seq(self) -> int`:\n  Returns the current next expected byte sequence number.\n- `buffered_bytes_count(self)\
+  \ -> int`:\n  Returns the total count of non-overlapping buffered bytes waiting for preceding gaps to be filled.\n- `is_empty(self)\
+  \ -> bool`:\n  Returns `True` if no out-of-order segments are currently buffered, `False` otherwise.\n"
+starter_code: "class PacketReassemblyBuffer:\n    def __init__(self, initial_seq: int = 0, window_size: int = 65535) -> None:\n\
+  \        \"\"\"Initialize TCP packet reassembly buffer with initial sequence number and window capacity.\"\"\"\n       \
+  \ pass\n\n    def receive_segment(self, seq: int, data: bytes) -> bytes:\n        \"\"\"Receive segment, buffer out-of-order\
+  \ bytes, and return newly contiguous in-order bytes.\"\"\"\n        pass\n\n    def expected_seq(self) -> int:\n       \
+  \ \"\"\"Return next expected sequence number.\"\"\"\n        pass\n\n    def buffered_bytes_count(self) -> int:\n      \
+  \  \"\"\"Return count of out-of-order buffered bytes.\"\"\"\n        pass\n\n    def is_empty(self) -> bool:\n        \"\
+  \"\"Return True if no out-of-order packets are held.\"\"\"\n        pass\n"
+canonical_solution: "class PacketReassemblyBuffer:\n    def __init__(self, initial_seq: int = 0, window_size: int = 65535)\
+  \ -> None:\n        if initial_seq < 0:\n            raise ValueError(\"initial_seq must be non-negative\")\n        if\
+  \ window_size < 1:\n            raise ValueError(\"window_size must be at least 1\")\n        self._expected_seq = initial_seq\n\
+  \        self._window_size = window_size\n        self._buffer: dict[int, bytes] = {}\n\n    def receive_segment(self, seq:\
+  \ int, data: bytes) -> bytes:\n        if not data:\n            return b\"\"\n\n        seg_end = seq + len(data)\n   \
+  \     max_allowed = self._expected_seq + self._window_size\n\n        # Completely before expected sequence or completely\
+  \ outside window\n        if seg_end <= self._expected_seq or seq >= max_allowed:\n            return b\"\"\n\n        #\
+  \ Trim left overlap (already received)\n        if seq < self._expected_seq:\n            offset = self._expected_seq -\
+  \ seq\n            data = data[offset:]\n            seq = self._expected_seq\n\n        # Trim right overflow (beyond window)\n\
+  \        if seq + len(data) > max_allowed:\n            excess = (seq + len(data)) - max_allowed\n            data = data[:-excess]\n\
+  \n        if not data:\n            return b\"\"\n\n        # Store into buffer by merging overlapping slices\n        self._merge_into_buffer(seq,\
+  \ data)\n\n        # Check if contiguous stream is available from expected_seq\n        delivered = bytearray()\n      \
+  \  while self._expected_seq in self._buffer:\n            chunk = self._buffer.pop(self._expected_seq)\n            delivered.extend(chunk)\n\
+  \            self._expected_seq += len(chunk)\n\n        return bytes(delivered)\n\n    def _merge_into_buffer(self, seq:\
+  \ int, data: bytes) -> None:\n        new_start = seq\n        new_end = seq + len(data)\n        new_bytes = bytearray(data)\n\
+  \n        overlaps = []\n        for s, d in self._buffer.items():\n            e = s + len(d)\n            if not (new_end\
+  \ < s or new_start > e):\n                overlaps.append((s, d))\n\n        for s, d in overlaps:\n            e = s +\
+  \ len(d)\n            del self._buffer[s]\n            if s < new_start:\n                prefix = d[:new_start - s]\n \
+  \               new_bytes = bytearray(prefix) + new_bytes\n                new_start = s\n            if e > new_end:\n\
+  \                suffix = d[new_end - s:]\n                new_bytes.extend(suffix)\n                new_end = e\n\n   \
+  \     self._buffer[new_start] = bytes(new_bytes)\n\n    def expected_seq(self) -> int:\n        return self._expected_seq\n\
+  \n    def buffered_bytes_count(self) -> int:\n        return sum(len(d) for d in self._buffer.values())\n\n    def is_empty(self)\
+  \ -> bool:\n        return len(self._buffer) == 0\n"
+visible_tests: "def test_in_order_packet_arrival():\n    buf = PacketReassemblyBuffer(initial_seq=0)\n    out1 = buf.receive_segment(0,\
+  \ b\"Hello, \")\n    out2 = buf.receive_segment(7, b\"World!\")\n    assert out1 == b\"Hello, \"\n    assert out2 == b\"\
+  World!\"\n    assert buf.expected_seq() == 13\n    assert buf.is_empty() is True\n\n\ndef test_out_of_order_reassembly():\n\
+  \    buf = PacketReassemblyBuffer(initial_seq=0)\n    # Packet 2 arrives first\n    assert buf.receive_segment(5, b\"World\"\
+  ) == b\"\"\n    assert buf.buffered_bytes_count() == 5\n    assert buf.is_empty() is False\n\n    # Packet 1 arrives second,\
+  \ unlocking contiguous stream\n    assert buf.receive_segment(0, b\"Hello\") == b\"HelloWorld\"\n    assert buf.expected_seq()\
+  \ == 10\n    assert buf.is_empty() is True\n"
+hidden_tests: "def test_duplicate_and_overlapping_packets():\n    buf = PacketReassemblyBuffer(initial_seq=100)\n    assert\
+  \ buf.receive_segment(100, b\"ABC\") == b\"ABC\"\n    # Duplicate arrival of previous data\n    assert buf.receive_segment(100,\
+  \ b\"ABC\") == b\"\"\n    # Overlapping packet covering partially delivered and new\n    assert buf.receive_segment(102,\
+  \ b\"CDEF\") == b\"DEF\"\n    assert buf.expected_seq() == 106\n\n\ndef test_packets_exceeding_window_dropped():\n    buf\
+  \ = PacketReassemblyBuffer(initial_seq=0, window_size=10)\n    # Segment starting at 12 is outside window [0, 10)\n    assert\
+  \ buf.receive_segment(12, b\"OUT_OF_BOUNDS\") == b\"\"\n    assert buf.buffered_bytes_count() == 0\n\n\ndef test_multiple_gaps_filled_progressively():\n\
+  \    buf = PacketReassemblyBuffer(initial_seq=0)\n    buf.receive_segment(20, b\"FOUR\")\n    buf.receive_segment(10, b\"\
+  12345\")\n    buf.receive_segment(15, b\"THREE\")\n    assert buf.buffered_bytes_count() == 14\n\n    # Fill hole 0..10\n\
+  \    out = buf.receive_segment(0, b\"0123456789\")\n    assert out == b\"012345678912345THREEFOUR\"\n    assert buf.expected_seq()\
+  \ == 24\n    assert buf.is_empty() is True\n\n\ndef test_empty_segment():\n    buf = PacketReassemblyBuffer(initial_seq=5)\n\
+  \    assert buf.receive_segment(5, b\"\") == b\"\"\n    assert buf.expected_seq() == 5\n\n\ndef test_scale_reverse_packet_stream():\n\
+  \    buf = PacketReassemblyBuffer(initial_seq=0, window_size=20000)\n    chunk_size = 10\n    num_chunks = 100\n\n    #\
+  \ Deliver in reverse order: 99, 98, ..., 1\n    for i in reversed(range(1, num_chunks)):\n        seq = i * chunk_size\n\
+  \        data = f\"{i:010d}\".encode()\n        assert buf.receive_segment(seq, data) == b\"\"\n\n    # Deliver chunk 0\
+  \ to unlock all\n    delivered = buf.receive_segment(0, f\"{0:010d}\".encode())\n    assert len(delivered) == num_chunks\
+  \ * chunk_size\n    assert buf.expected_seq() == num_chunks * chunk_size\n    assert buf.is_empty() is True\n\n\ndef test_parameter_validation():\n\
+  \    import pytest\n    with pytest.raises(ValueError):\n        PacketReassemblyBuffer(initial_seq=-1)\n    with pytest.raises(ValueError):\n\
+  \        PacketReassemblyBuffer(window_size=0)\n"

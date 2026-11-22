@@ -1,0 +1,96 @@
+task_id: EF-PY-005
+title: B-Tree Index Node Split and Insertion
+language: python
+difficulty: hard
+category: data_structures
+tags:
+- b-tree
+- database-index
+- data_structures
+- algorithmic
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 25
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# B-Tree Index Node Split and Insertion\n\nImplement a self-balancing B-Tree index structure conforming to the classic\
+  \ Cormen-Leiserson-Rivest-Stein (CLRS) B-Tree algorithm with minimum degree $t$.\n\n## Requirements\n\nImplement the class\
+  \ `BTree`:\n\n- `__init__(self, t: int = 3)`:\n  Initializes B-Tree with minimum degree $t \\ge 2$.\n  Each node (except\
+  \ root) contains at least $t - 1$ keys, and at most $2t - 1$ keys.\n  Each internal node contains at least $t$ children\
+  \ and at most $2t$ children.\n- `insert(self, key: int, val: Any = None) -> None`:\n  Inserts `(key, val)` into the B-Tree.\n\
+  \  If `key` already exists, update its associated value without duplicating the key.\n  Maintains the B-Tree invariants\
+  \ by proactively splitting full nodes during downward traversal.\n- `search(self, key: int) -> Any | None`:\n  Returns the\
+  \ value associated with `key` if found, else `None`.\n- `range_query(self, low: int, high: int) -> list[tuple[int, Any]]`:\n\
+  \  Returns an ordered list of `(key, value)` pairs such that `low <= key <= high`.\n- `to_inorder_keys(self) -> list[int]`:\n\
+  \  Returns a list of all keys in the tree in ascending sorted order.\n"
+starter_code: "from typing import Any\n\n\nclass BTree:\n    def __init__(self, t: int = 3) -> None:\n        \"\"\"Initialize\
+  \ B-Tree with minimum degree t.\"\"\"\n        pass\n\n    def insert(self, key: int, val: Any = None) -> None:\n      \
+  \  \"\"\"Insert or update key-value pair.\"\"\"\n        pass\n\n    def search(self, key: int) -> Any | None:\n       \
+  \ \"\"\"Search for key and return its value or None.\"\"\"\n        pass\n\n    def range_query(self, low: int, high: int)\
+  \ -> list[tuple[int, Any]]:\n        \"\"\"Return sorted list of (key, val) within [low, high] inclusive.\"\"\"\n      \
+  \  pass\n\n    def to_inorder_keys(self) -> list[int]:\n        \"\"\"Return all keys in ascending order.\"\"\"\n      \
+  \  pass\n"
+canonical_solution: "from typing import Any\n\n\nclass _BTreeNode:\n    def __init__(self, is_leaf: bool = True) -> None:\n\
+  \        self.is_leaf = is_leaf\n        self.keys: list[int] = []\n        self.values: list[Any] = []\n        self.children:\
+  \ list['_BTreeNode'] = []\n\n\nclass BTree:\n    def __init__(self, t: int = 3) -> None:\n        if t < 2:\n          \
+  \  raise ValueError(\"Minimum degree t must be at least 2\")\n        self.t = t\n        self.root = _BTreeNode(is_leaf=True)\n\
+  \n    def search(self, key: int) -> Any | None:\n        def _search(node: _BTreeNode, k: int) -> Any | None:\n        \
+  \    i = 0\n            while i < len(node.keys) and k > node.keys[i]:\n                i += 1\n            if i < len(node.keys)\
+  \ and node.keys[i] == k:\n                return node.values[i]\n            if node.is_leaf:\n                return None\n\
+  \            return _search(node.children[i], k)\n\n        return _search(self.root, key)\n\n    def _split_child(self,\
+  \ parent: _BTreeNode, i: int) -> None:\n        t = self.t\n        full_child = parent.children[i]\n        new_sibling\
+  \ = _BTreeNode(is_leaf=full_child.is_leaf)\n\n        median_key = full_child.keys[t - 1]\n        median_val = full_child.values[t\
+  \ - 1]\n\n        new_sibling.keys = full_child.keys[t:]\n        new_sibling.values = full_child.values[t:]\n        full_child.keys\
+  \ = full_child.keys[: t - 1]\n        full_child.values = full_child.values[: t - 1]\n\n        if not full_child.is_leaf:\n\
+  \            new_sibling.children = full_child.children[t:]\n            full_child.children = full_child.children[:t]\n\
+  \n        parent.children.insert(i + 1, new_sibling)\n        parent.keys.insert(i, median_key)\n        parent.values.insert(i,\
+  \ median_val)\n\n    def _insert_non_full(self, node: _BTreeNode, key: int, val: Any) -> None:\n        i = len(node.keys)\
+  \ - 1\n\n        if node.is_leaf:\n            while i >= 0 and key < node.keys[i]:\n                i -= 1\n          \
+  \  if i >= 0 and node.keys[i] == key:\n                node.values[i] = val\n                return\n            node.keys.insert(i\
+  \ + 1, key)\n            node.values.insert(i + 1, val)\n        else:\n            while i >= 0 and key < node.keys[i]:\n\
+  \                i -= 1\n            if i >= 0 and node.keys[i] == key:\n                node.values[i] = val\n        \
+  \        return\n            i += 1\n            if len(node.children[i].keys) == 2 * self.t - 1:\n                self._split_child(node,\
+  \ i)\n                if key > node.keys[i]:\n                    i += 1\n                elif key == node.keys[i]:\n  \
+  \                  node.values[i] = val\n                    return\n            self._insert_non_full(node.children[i],\
+  \ key, val)\n\n    def insert(self, key: int, val: Any = None) -> None:\n        # Check if key already exists to update\
+  \ in place\n        def _update_if_exists(node: _BTreeNode, k: int, v: Any) -> bool:\n            i = 0\n            while\
+  \ i < len(node.keys) and k > node.keys[i]:\n                i += 1\n            if i < len(node.keys) and node.keys[i] ==\
+  \ k:\n                node.values[i] = v\n                return True\n            if node.is_leaf:\n                return\
+  \ False\n            return _update_if_exists(node.children[i], k, v)\n\n        if _update_if_exists(self.root, key, val):\n\
+  \            return\n\n        r = self.root\n        if len(r.keys) == 2 * self.t - 1:\n            new_root = _BTreeNode(is_leaf=False)\n\
+  \            new_root.children.append(self.root)\n            self._split_child(new_root, 0)\n            self.root = new_root\n\
+  \            self._insert_non_full(new_root, key, val)\n        else:\n            self._insert_non_full(r, key, val)\n\n\
+  \    def to_inorder_keys(self) -> list[int]:\n        keys: list[int] = []\n\n        def _inorder(node: _BTreeNode) ->\
+  \ None:\n            for i in range(len(node.keys)):\n                if not node.is_leaf:\n                    _inorder(node.children[i])\n\
+  \                keys.append(node.keys[i])\n            if not node.is_leaf:\n                _inorder(node.children[-1])\n\
+  \n        _inorder(self.root)\n        return keys\n\n    def range_query(self, low: int, high: int) -> list[tuple[int,\
+  \ Any]]:\n        results: list[tuple[int, Any]] = []\n\n        def _traverse(node: _BTreeNode) -> None:\n            for\
+  \ i in range(len(node.keys)):\n                k = node.keys[i]\n                v = node.values[i]\n                if\
+  \ not node.is_leaf and k >= low:\n                    _traverse(node.children[i])\n                if low <= k <= high:\n\
+  \                    results.append((k, v))\n                if k > high:\n                    return\n            if not\
+  \ node.is_leaf:\n                _traverse(node.children[-1])\n\n        _traverse(self.root)\n        return sorted(results,\
+  \ key=lambda x: x[0])\n"
+visible_tests: "def test_btree_basic_insert_search():\n    tree = BTree(t=2)\n    for k in [10, 20, 5, 6, 12, 30, 7, 17]:\n\
+  \        tree.insert(k, f\"val_{k}\")\n\n    assert tree.search(10) == \"val_10\"\n    assert tree.search(7) == \"val_7\"\
+  \n    assert tree.search(999) is None\n    assert tree.to_inorder_keys() == [5, 6, 7, 10, 12, 17, 20, 30]\n\n\ndef test_btree_range_query():\n\
+  \    tree = BTree(t=3)\n    for i in range(1, 21):\n        tree.insert(i, i * 10)\n\n    res = tree.range_query(5, 10)\n\
+  \    expected = [(i, i * 10) for i in range(5, 11)]\n    assert res == expected\n"
+hidden_tests: "def test_root_split_multiple_levels():\n    tree = BTree(t=2)  # max keys per node = 3\n    for x in range(1,\
+  \ 32):\n        tree.insert(x, x * 2)\n\n    assert tree.to_inorder_keys() == list(range(1, 32))\n    for x in range(1,\
+  \ 32):\n        assert tree.search(x) == x * 2\n\n\ndef test_update_existing_key():\n    tree = BTree(t=3)\n    tree.insert(42,\
+  \ \"original\")\n    assert tree.search(42) == \"original\"\n    tree.insert(42, \"updated\")\n    assert tree.search(42)\
+  \ == \"updated\"\n    assert tree.to_inorder_keys() == [42]\n\n\ndef test_range_query_boundary_conditions():\n    tree =\
+  \ BTree(t=2)\n    tree.insert(10, \"a\")\n    tree.insert(20, \"b\")\n    tree.insert(30, \"c\")\n    assert tree.range_query(0,\
+  \ 5) == []\n    assert tree.range_query(10, 10) == [(10, \"a\")]\n    assert tree.range_query(25, 40) == [(30, \"c\")]\n\
+  \n\ndef test_reverse_insertion_order():\n    tree = BTree(t=3)\n    for x in reversed(range(100)):\n        tree.insert(x,\
+  \ x)\n    assert tree.to_inorder_keys() == list(range(100))\n\n\ndef test_large_random_scale():\n    import random\n   \
+  \ rng = random.Random(42)\n    tree = BTree(t=4)\n    data = list(range(1000))\n    rng.shuffle(data)\n\n    for k in data:\n\
+  \        tree.insert(k, k)\n\n    assert tree.to_inorder_keys() == list(range(1000))\n    for k in [0, 499, 999]:\n    \
+  \    assert tree.search(k) == k\n\n\ndef test_minimum_degree_parameter_validation():\n    import pytest\n    with pytest.raises(ValueError):\n\
+  \        BTree(t=1)\n"

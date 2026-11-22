@@ -1,0 +1,81 @@
+task_id: EF-PY-002
+title: Async Token-Bucket Rate Limiter with Burst Capacity
+language: python
+difficulty: medium
+category: concurrency
+tags:
+- rate-limiter
+- concurrency
+- asyncio
+- token-bucket
+- systems
+time_limit_sec: 2.0
+memory_limit_mb: 256
+rubric_rules:
+  banned_imports:
+  - subprocess
+  - socket
+  - ctypes
+  max_cyclomatic_complexity: 20
+  max_lines: 200
+  time_limit_sec: 2.0
+  memory_limit_mb: 256
+prompt: "# Async Token-Bucket Rate Limiter with Burst Capacity\n\nImplement an asynchronous token bucket rate limiter supporting\
+  \ burst traffic and asynchronous token acquisition.\n\n## Requirements\n\nImplement the class `AsyncTokenBucket`:\n\n- `__init__(self,\
+  \ rate: float, capacity: float)`:\n  Initializes limiter with a refill `rate` (tokens per second, `rate > 0`) and maximum\
+  \ burst `capacity` (`capacity > 0`).\n  Initially, the bucket is completely full with `capacity` tokens.\n- `try_acquire(self,\
+  \ tokens: float = 1.0) -> bool`:\n  Non-blocking attempt to acquire `tokens`.\n  If enough tokens are available, consumes\
+  \ them and returns `True`.\n  Otherwise, returns `False` immediately without consuming tokens or sleeping.\n- `async acquire(self,\
+  \ tokens: float = 1.0, timeout: float | None = None) -> bool`:\n  Asynchronously waits until enough tokens accumulate to\
+  \ satisfy the request.\n  If acquired before `timeout` seconds expire, consumes `tokens` and returns `True`.\n  If `timeout`\
+  \ is reached before tokens become available, returns `False` without consuming tokens.\n  If `timeout is None`, waits indefinitely\
+  \ until tokens become available.\n- `available_tokens(self) -> float`:\n  Returns the current number of available tokens\
+  \ after accounting for time elapsed since the last refill.\n- `reset(self) -> None`:\n  Resets the bucket to full capacity.\n"
+starter_code: "import asyncio\nimport time\n\n\nclass AsyncTokenBucket:\n    def __init__(self, rate: float, capacity: float)\
+  \ -> None:\n        \"\"\"Initialize token bucket with refill rate (per sec) and max burst capacity.\"\"\"\n        pass\n\
+  \n    def try_acquire(self, tokens: float = 1.0) -> bool:\n        \"\"\"Non-blocking token acquisition attempt.\"\"\"\n\
+  \        pass\n\n    async def acquire(self, tokens: float = 1.0, timeout: float | None = None) -> bool:\n        \"\"\"\
+  Async acquisition waiting up to timeout seconds.\"\"\"\n        pass\n\n    def available_tokens(self) -> float:\n     \
+  \   \"\"\"Return current tokens available.\"\"\"\n        pass\n\n    def reset(self) -> None:\n        \"\"\"Reset bucket\
+  \ to full capacity.\"\"\"\n        pass\n"
+canonical_solution: "import asyncio\nimport time\n\n\nclass AsyncTokenBucket:\n    def __init__(self, rate: float, capacity:\
+  \ float) -> None:\n        if rate <= 0:\n            raise ValueError(\"Rate must be positive\")\n        if capacity <=\
+  \ 0:\n            raise ValueError(\"Capacity must be positive\")\n        self._rate = float(rate)\n        self._capacity\
+  \ = float(capacity)\n        self._tokens = float(capacity)\n        self._last_refill = time.monotonic()\n        self._lock\
+  \ = asyncio.Lock()\n\n    def _refill(self, now: float) -> None:\n        elapsed = now - self._last_refill\n        if\
+  \ elapsed > 0:\n            self._tokens = min(self._capacity, self._tokens + elapsed * self._rate)\n            self._last_refill\
+  \ = now\n\n    def try_acquire(self, tokens: float = 1.0) -> bool:\n        if tokens <= 0:\n            return True\n \
+  \       now = time.monotonic()\n        self._refill(now)\n        if self._tokens >= tokens:\n            self._tokens\
+  \ -= tokens\n            return True\n        return False\n\n    async def acquire(self, tokens: float = 1.0, timeout:\
+  \ float | None = None) -> bool:\n        if tokens <= 0:\n            return True\n        if tokens > self._capacity:\n\
+  \            return False\n\n        deadline = (time.monotonic() + timeout) if timeout is not None else None\n\n      \
+  \  while True:\n            async with self._lock:\n                now = time.monotonic()\n                self._refill(now)\n\
+  \                if self._tokens >= tokens:\n                    self._tokens -= tokens\n                    return True\n\
+  \n                needed = tokens - self._tokens\n                wait_time = needed / self._rate\n\n                if\
+  \ deadline is not None:\n                    remaining = deadline - now\n                    if remaining <= 0:\n      \
+  \                  return False\n                    wait_time = min(wait_time, remaining)\n\n            # Sleep outside\
+  \ lock to allow other coroutines to execute\n            await asyncio.sleep(min(wait_time, 0.05))\n\n            if deadline\
+  \ is not None and time.monotonic() >= deadline:\n                # One final attempt\n                async with self._lock:\n\
+  \                    now = time.monotonic()\n                    self._refill(now)\n                    if self._tokens\
+  \ >= tokens:\n                        self._tokens -= tokens\n                        return True\n                    return\
+  \ False\n\n    def available_tokens(self) -> float:\n        now = time.monotonic()\n        self._refill(now)\n       \
+  \ return self._tokens\n\n    def reset(self) -> None:\n        self._tokens = self._capacity\n        self._last_refill\
+  \ = time.monotonic()\n"
+visible_tests: "import asyncio\n\n\nasync def test_burst_capacity_try_acquire():\n    bucket = AsyncTokenBucket(rate=10.0,\
+  \ capacity=5.0)\n    assert bucket.try_acquire(3.0) is True\n    assert bucket.try_acquire(2.0) is True\n    assert bucket.try_acquire(1.0)\
+  \ is False\n\n\nasync def test_async_acquire_immediate():\n    bucket = AsyncTokenBucket(rate=10.0, capacity=10.0)\n   \
+  \ res = await bucket.acquire(5.0)\n    assert res is True\n    assert bucket.available_tokens() <= 5.1\n"
+hidden_tests: "import asyncio\nimport time\n\n\nasync def test_token_refill_over_time():\n    bucket = AsyncTokenBucket(rate=20.0,\
+  \ capacity=5.0)\n    assert bucket.try_acquire(5.0) is True\n    assert bucket.try_acquire(1.0) is False\n    await asyncio.sleep(0.12)\n\
+  \    # After ~0.12s, at least 2 tokens refilled\n    assert bucket.try_acquire(2.0) is True\n\n\nasync def test_acquire_timeout_failure():\n\
+  \    bucket = AsyncTokenBucket(rate=2.0, capacity=5.0)\n    assert bucket.try_acquire(5.0) is True\n    # Bucket is empty.\
+  \ Needing 4 tokens requires 2.0s. Timeout 0.05s should fail.\n    acquired = await bucket.acquire(4.0, timeout=0.05)\n \
+  \   assert acquired is False\n\n\nasync def test_acquire_waiting_success():\n    bucket = AsyncTokenBucket(rate=50.0, capacity=10.0)\n\
+  \    assert bucket.try_acquire(10.0) is True\n    # Needs 2 tokens => ~0.04s. Timeout 0.2s should succeed.\n    start =\
+  \ time.monotonic()\n    acquired = await bucket.acquire(2.0, timeout=0.2)\n    elapsed = time.monotonic() - start\n    assert\
+  \ acquired is True\n    assert elapsed >= 0.03\n\n\nasync def test_exceed_capacity_rejected():\n    bucket = AsyncTokenBucket(rate=100.0,\
+  \ capacity=10.0)\n    assert await bucket.acquire(15.0) is False\n\n\nasync def test_reset_functionality():\n    bucket\
+  \ = AsyncTokenBucket(rate=5.0, capacity=10.0)\n    assert bucket.try_acquire(10.0) is True\n    assert bucket.available_tokens()\
+  \ < 1.0\n    bucket.reset()\n    assert bucket.available_tokens() == 10.0\n    assert bucket.try_acquire(10.0) is True\n\
+  \n\nasync def test_zero_or_negative_tokens():\n    bucket = AsyncTokenBucket(rate=10.0, capacity=5.0)\n    assert bucket.try_acquire(0.0)\
+  \ is True\n    assert await bucket.acquire(0.0) is True\n"
